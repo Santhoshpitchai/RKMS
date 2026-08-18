@@ -1,0 +1,54 @@
+@import 'tailwindcss';
+@import './styles/globals.css';
+
+@layer base {
+  html, body, #root { min-height: 100vh; height: 100%; margin: 0; }
+}
+
+/* Responsive Typography & Fluid Text Wraps for Kannada & English */
+*, ::before, ::after {
+  box-sizing: border-box;
+}
+
+body, h1, h2, h3, h4, h5, h6, p, span, button, a, div {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Completely Hide Google Translate Top Banner Frame, Gadget Popups & Spinners */
+#google_translate_element,
+.goog-te-banner-frame,
+.goog-te-banner,
+iframe.goog-te-banner-frame,
+iframe[id*=":1.container"],
+iframe[id*=":2.container"],
+.VIpgJd-ZJuic-OofOHc-OWbGnE-ihSuper,
+.goog-te-gadget,
+.goog-te-gadget-simple,
+.goog-te-spinner-pos,
+.goog-te-balloon-frame,
+body > .skiptranslate {
+  display: none !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  height: 0 !important;
+  width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.goog-te-gadget-icon {
+  display: none !important;
+}
