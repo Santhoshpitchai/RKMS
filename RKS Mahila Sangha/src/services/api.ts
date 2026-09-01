@@ -206,6 +206,23 @@ export const donationApi = {
   },
 };
 
+// Payment Common API
+export const paymentApi = {
+  cancelOrder: async (orderId: string, reason?: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/payments/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, reason }),
+      });
+      return response.json() as Promise<ApiResponse<any>>;
+    } catch (e) {
+      console.warn('Payment cancel request warning:', e);
+      return { success: false };
+    }
+  },
+};
+
 // Events API
 export const eventsApi = {
   getEvents: async () => {
@@ -372,5 +389,16 @@ export const userApi = {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     return response.json() as Promise<ApiResponse<{ user: any }>>;
+  },
+
+  getHistory: async (token: string) => {
+    const response = await fetch(`${API_BASE_URL}/user/history`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return response.json() as Promise<ApiResponse<any> & {
+      membership?: any;
+      donations?: any[];
+      eventRegistrations?: any[];
+    }>;
   },
 };

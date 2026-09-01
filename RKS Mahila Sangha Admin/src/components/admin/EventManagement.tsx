@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, X, Upload, Calendar, MapPin, Search, LayoutGrid, List, Sparkles, Ticket, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi, resolveBackendAssetUrl } from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 interface EventItem {
   id: number;
@@ -17,12 +18,48 @@ interface EventItem {
 }
 
 export function EventManagement() {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [events, setEvents] = useState<EventItem[]>([]);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<'all' | 'upcoming' | 'past'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
+  const loadData = async () => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const eventsRes = await adminApi.getEvents(token);
+      if (eventsRes && eventsRes.success && eventsRes.events) {
+        setEvents(eventsRes.events as EventItem[]);
+      }
+    } catch (e) {
+      console.error('Error loading events:', e);
+    } finally {
+      setIsLoading(false);
+    }
+
+    try {
+      const regRes = await adminApi.getEventRegistrations(token);
+      if (regRes && regRes.success && regRes.registrations) {
+        setRegistrations(regRes.registrations);
+      }
+    } catch (e) {
+      console.warn('Error loading registrations:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
@@ -36,33 +73,9 @@ export function EventManagement() {
     isFree: true,
     category: 'upcoming' as 'upcoming' | 'past',
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [savedImageUrl, setSavedImageUrl] = useState<string>('');
-
-  const loadData = async () => {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      toast.error('Please login again');
-      return;
-    }
-    try {
-      const [eventsRes, regRes] = await Promise.all([
-        adminApi.getEvents(token),
-        adminApi.getEventRegistrations(token)
-      ]);
-      if (eventsRes.success && eventsRes.events) setEvents(eventsRes.events as EventItem[]);
-      if (regRes.success && regRes.registrations) setRegistrations(regRes.registrations);
-    } catch {
-      toast.error('Failed to load event data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const handleOpenModal = (event?: EventItem) => {
     if (event) {
@@ -79,8 +92,8 @@ export function EventManagement() {
         isFree: !!event.is_free,
         category: (event.category as 'upcoming' | 'past') || 'upcoming',
       });
-      setImagePreview(existing ? resolveBackendAssetUrl(existing) : '');
-      setImageFile(null);
+      setImagePreviews(existing ? [resolveBackendAssetUrl(existing)] : []);
+      setImageFiles([]);
     } else {
       setEditingEvent(null);
       setSavedImageUrl('');
@@ -94,31 +107,27 @@ export function EventManagement() {
         isFree: true,
         category: 'upcoming',
       });
-      setImagePreview('');
-      setImageFile(null);
+      setImagePreviews([]);
+      setImageFiles([]);
     }
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
-    if (imagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
-    }
+    imagePreviews.forEach(p => { if (p.startsWith('blob:')) URL.revokeObjectURL(p); });
     setShowModal(false);
     setEditingEvent(null);
-    setImageFile(null);
-    setImagePreview('');
+    setImageFiles([]);
+    setImagePreviews([]);
     setSavedImageUrl('');
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (imagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview);
-      }
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
+    const files = Array.from(e.target.files || []).slice(0, 4);
+    if (files.length > 0) {
+      imagePreviews.forEach(p => { if (p.startsWith('blob:')) URL.revokeObjectURL(p); });
+      setImageFiles(files);
+      setImagePreviews(files.map(f => URL.createObjectURL(f)));
       setFormData((prev) => ({ ...prev, imageUrlText: '' }));
     }
   };
@@ -133,8 +142,8 @@ export function EventManagement() {
     fd.append('price', String(formData.isFree ? 0 : formData.price));
     fd.append('is_free', formData.isFree ? 'true' : 'false');
 
-    if (imageFile) {
-      fd.append('image', imageFile);
+    if (imageFiles.length > 0) {
+      imageFiles.forEach(file => fd.append('eventImages', file));
     } else {
       const urlText = formData.imageUrlText.trim();
       if (urlText.startsWith('http')) {
@@ -154,7 +163,7 @@ export function EventManagement() {
       return;
     }
 
-    if (!editingEvent && !imageFile && !formData.imageUrlText.trim().startsWith('http')) {
+    if (!editingEvent && imageFiles.length === 0 && !formData.imageUrlText.trim().startsWith('http')) {
       toast.error('Add an event image (upload a file or paste an image URL)');
       return;
     }

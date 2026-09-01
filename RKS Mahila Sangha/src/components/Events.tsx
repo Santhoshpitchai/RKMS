@@ -1,9 +1,10 @@
-import { Calendar, MapPin, Clock, ArrowRight } from 'lucide-react';
+import { Calendar, MapPin, Clock, ArrowRight, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { eventsApi, resolveBackendAssetUrl } from '../services/api';
 import { EventRegistrationModal } from './EventRegistrationModal';
+import { UserAuthModal } from './UserAuthModal';
 
 interface Event {
   id: number;
@@ -14,6 +15,7 @@ interface Event {
   description: string;
   image?: string;
   image_url?: string;
+  images?: string[];
   category: 'upcoming' | 'past';
   attendees?: number;
   current_participants?: number;
@@ -22,25 +24,86 @@ interface Event {
   fee?: number;
 }
 
+// Image gallery carousel for past events
+function EventGallery({ images, title }: { images: string[]; title: string }) {
+  const [current, setCurrent] = useState(0);
+  if (!images.length) return null;
+
+  return (
+    <div className="relative">
+      <div className="relative h-52 bg-gray-100 overflow-hidden rounded-t-2xl">
+        <ImageWithFallback
+          src={resolveBackendAssetUrl(images[current])}
+          alt={`${title} – photo ${current + 1}`}
+          className="w-full h-full object-cover transition-opacity duration-300"
+        />
+        {images.length > 1 && (
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); setCurrent((c) => (c - 1 + images.length) % images.length); }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded-full hover:bg-black/70 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setCurrent((c) => (c + 1) % images.length); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded-full hover:bg-black/70 transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === current ? 'bg-white scale-125' : 'bg-white/50'}`}
+                />
+              ))}
+            </div>
+            <div className="absolute top-2 right-2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+              {current + 1}/{images.length}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Events() {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingEvent, setPendingEvent] = useState<Event | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [userSession, setUserSession] = useState<{ name?: string; email?: string; phone?: string } | null>(null);
+  const [expandedEvents, setExpandedEvents] = useState<{ [id: number]: boolean }>({});
 
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const checkUser = () => {
     const storedUser = localStorage.getItem('userData');
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
         setUserSession(user);
       } catch (e) {
-        // ignore
+        setUserSession(null);
       }
+    } else {
+      setUserSession(null);
     }
+  };
+
+  useEffect(() => {
+    checkUser();
+    window.addEventListener('user_auth_change', checkUser);
+    window.addEventListener('storage', checkUser);
+    return () => {
+      window.removeEventListener('user_auth_change', checkUser);
+      window.removeEventListener('storage', checkUser);
+    };
   }, []);
 
   useEffect(() => {
@@ -65,15 +128,28 @@ export function Events() {
     };
 
     loadEvents(true);
-    const interval = setInterval(() => loadEvents(false), 4000);
-    const handleFocus = () => loadEvents(false);
 
+    let sse: EventSource | null = null;
+    try {
+      const apiOrigin = window.location.hostname === 'localhost' ? 'http://localhost:5001/api' : '/api';
+      sse = new EventSource(`${apiOrigin}/realtime/stream`);
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (['events_updated'].includes(data.type)) {
+            loadEvents(false);
+          }
+        } catch (e) {}
+      };
+    } catch (err) {}
+
+    const handleFocus = () => loadEvents(false);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('storage', () => loadEvents(false));
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (sse) sse.close();
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('storage', () => loadEvents(false));
     };
@@ -82,8 +158,24 @@ export function Events() {
   const filteredEvents = events.filter(event => event.category === activeTab);
 
   const handleRegister = (event: Event) => {
+    const token = localStorage.getItem('userToken');
+    if (!token) {
+      setPendingEvent(event);
+      setShowAuthModal(true);
+      return;
+    }
     setSelectedEvent(event);
     setShowRegistrationModal(true);
+  };
+
+  const handleAuthSuccess = (u: { name: string; email: string; phone?: string }) => {
+    setUserSession(u);
+    setShowAuthModal(false);
+    if (pendingEvent) {
+      setSelectedEvent(pendingEvent);
+      setPendingEvent(null);
+      setShowRegistrationModal(true);
+    }
   };
 
   return (
@@ -131,6 +223,14 @@ export function Events() {
               Past Celebrations ({events.filter(e => e.category === 'past').length})
             </button>
           </div>
+
+          {/* Login reminder for upcoming events tab */}
+          {activeTab === 'upcoming' && !userSession && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2 rounded-full font-semibold">
+              <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Please <strong>login</strong> to register for events</span>
+            </div>
+          )}
         </div>
 
         {isLoading && (
@@ -145,37 +245,72 @@ export function Events() {
             {filteredEvents.map((event) => {
               const pricePerPerson = Number(event.price || event.fee || 0);
               const isFree = event.is_free || pricePerPerson === 0;
+              const isPast = event.category === 'past';
+
+              // Build images array
+              const allImages: string[] = [];
+              if (event.images && event.images.length) {
+                event.images.forEach(img => { if (img) allImages.push(img); });
+              } else if (event.image_url) {
+                allImages.push(event.image_url);
+              } else if (event.image) {
+                allImages.push(event.image);
+              }
 
               return (
                 <div key={event.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col justify-between">
                   <div>
-                    <div className="relative h-52 bg-gray-100">
-                      <ImageWithFallback
-                        src={
-                          resolveBackendAssetUrl(event.image_url) ||
-                          resolveBackendAssetUrl(event.image)
-                        }
-                        alt={event.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-3 right-3 bg-[#0A6C87] text-white text-xs px-3 py-1 rounded-full font-bold shadow-md">
-                        {event.category === 'upcoming' ? 'Upcoming' : 'Completed'}
+                    {/* Image / Gallery */}
+                    {isPast && allImages.length > 0 ? (
+                      <div className="relative">
+                        <EventGallery images={allImages} title={event.title} />
+                        <div className="absolute top-3 right-3 bg-gray-700 text-white text-xs px-3 py-1 rounded-full font-bold shadow-md">
+                          Completed
+                        </div>
+                        {allImages.length > 1 && (
+                          <div className="absolute top-3 left-3 bg-white/90 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+                            📷 {allImages.length} Photos
+                          </div>
+                        )}
                       </div>
-                      
-                      {isFree ? (
-                        <div className="absolute top-3 left-3 bg-emerald-600 text-white text-xs px-3 py-1 rounded-full font-bold shadow-md uppercase">
-                          FREE ENTRY
+                    ) : (
+                      <div className="relative h-52 bg-gray-100">
+                        <ImageWithFallback
+                          src={resolveBackendAssetUrl(allImages[0] || '')}
+                          alt={event.title}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className={`absolute top-3 right-3 text-white text-xs px-3 py-1 rounded-full font-bold shadow-md ${isPast ? 'bg-gray-700' : 'bg-[#0A6C87]'}`}>
+                          {isPast ? 'Completed' : 'Upcoming'}
                         </div>
-                      ) : (
-                        <div className="absolute top-3 left-3 bg-[#E5C100] text-[#0A6C87] text-xs px-3 py-1 rounded-full font-extrabold shadow-md">
-                          PAID • ₹{pricePerPerson} / Person
-                        </div>
-                      )}
-                    </div>
+                        {isFree ? (
+                          <div className="absolute top-3 left-3 bg-emerald-600 text-white text-xs px-3 py-1 rounded-full font-bold shadow-md uppercase">
+                            FREE ENTRY
+                          </div>
+                        ) : (
+                          <div className="absolute top-3 left-3 bg-[#E5C100] text-[#0A6C87] text-xs px-3 py-1 rounded-full font-extrabold shadow-md">
+                            PAID • ₹{pricePerPerson} / Person
+                          </div>
+                        )}
+                      </div>
+                    )}
                     
                     <div className="p-6 space-y-3">
                       <h3 className="text-xl font-bold text-gray-900 line-clamp-1">{event.title}</h3>
-                      <p className="text-gray-600 text-xs leading-relaxed line-clamp-3">{event.description}</p>
+                      
+                      <div>
+                        <p className={`text-gray-600 text-xs leading-relaxed ${expandedEvents[event.id] ? '' : 'line-clamp-3'}`}>
+                          {event.description}
+                        </p>
+                        {event.description && event.description.length > 110 && (
+                          <button
+                            onClick={() => setExpandedEvents(prev => ({ ...prev, [event.id]: !prev[event.id] }))}
+                            className="text-[11px] font-bold text-[#0A6C87] hover:underline mt-1 focus:outline-none"
+                          >
+                            {expandedEvents[event.id] ? 'Show Less ▲' : 'Read More ▼'}
+                          </button>
+                        )}
+                      </div>
                       
                       <div className="space-y-2 pt-2 border-t text-xs text-gray-600">
                         <div className="flex items-center gap-2">
@@ -199,7 +334,20 @@ export function Events() {
                   </div>
 
                   <div className="p-6 pt-0">
-                    {event.category === 'upcoming' ? (
+                    {isPast ? (
+                      /* Past events: show photos note + no registration */
+                      <div className="space-y-2">
+                        <div className="w-full bg-gray-100 text-gray-500 py-2 rounded-lg font-semibold text-xs text-center">
+                          Event Concluded – Registration Closed
+                        </div>
+                        {allImages.length > 1 && (
+                          <p className="text-[10px] text-center text-gray-400 font-medium">
+                            📷 {allImages.length} event photos – scroll through above
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      /* Upcoming events: Register button */
                       <button
                         onClick={() => handleRegister(event)}
                         className={`w-full py-2.5 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm ${
@@ -208,13 +356,10 @@ export function Events() {
                             : 'bg-[#E5C100] text-[#0A6C87] hover:bg-[#CCA900]'
                         }`}
                       >
+                        {!userSession && <Lock className="w-3.5 h-3.5" />}
                         {isFree ? 'Register Free' : `Pay & Register (₹${pricePerPerson})`}
                         <ArrowRight className="w-4 h-4" />
                       </button>
-                    ) : (
-                      <div className="w-full bg-gray-100 text-gray-500 py-2 rounded-lg font-semibold text-xs text-center">
-                        Event Concluded
-                      </div>
                     )}
                   </div>
                 </div>
@@ -236,6 +381,14 @@ export function Events() {
         onClose={() => setShowRegistrationModal(false)}
         event={selectedEvent}
         userSession={userSession}
+      />
+
+      {/* Auth Modal – shown when user tries to register without login */}
+      <UserAuthModal
+        isOpen={showAuthModal}
+        onClose={() => { setShowAuthModal(false); setPendingEvent(null); }}
+        onSuccess={handleAuthSuccess}
+        title="Login to Register for This Event"
       />
     </div>
   );

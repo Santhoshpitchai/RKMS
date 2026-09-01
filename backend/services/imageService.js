@@ -75,9 +75,10 @@ const uploadImage = async (file) => {
     // 1. Try Supabase Storage Bucket (100% Free - 1GB Included)
     if (isSupabaseConfigured()) {
       try {
-        const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'Images';
+        const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'images';
         const fileName = `event-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
 
+        let usedBucket = bucketName;
         let { data, error } = await supabase.storage
           .from(bucketName)
           .upload(fileName, fileBuffer, {
@@ -85,7 +86,7 @@ const uploadImage = async (file) => {
             upsert: true
           });
 
-        // Fallback check for lowercase 'images' if bucketName failed
+        // Fallback: try lowercase 'images' bucket if the configured name failed
         if (error && bucketName !== 'images') {
           const fallbackRes = await supabase.storage
             .from('images')
@@ -96,16 +97,19 @@ const uploadImage = async (file) => {
           if (!fallbackRes.error) {
             data = fallbackRes.data;
             error = null;
+            usedBucket = 'images';
           }
         }
 
         if (!error && data) {
+          // Always use the known bucket name (not parsed from path) to avoid wrong URLs
           const { data: publicUrlData } = supabase.storage
-            .from(data.path ? data.path.split('/')[0] : bucketName)
+            .from(usedBucket)
             .getPublicUrl(fileName);
 
           if (publicUrlData && publicUrlData.publicUrl) {
             try { fs.unlinkSync(file.path); } catch (_) { }
+            console.log('✅ Image uploaded to Supabase Storage:', publicUrlData.publicUrl);
             return {
               success: true,
               imageUrl: publicUrlData.publicUrl,

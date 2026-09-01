@@ -44,11 +44,17 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <Phone size={16} className="text-[#E5C100] flex-shrink-0" />
-                <span className="text-cyan-100">+91 9972648909</span>
+                <span className="notranslate text-cyan-100">+91 9972648909</span>
               </div>
               <div className="flex items-center gap-2">
                 <Mail size={16} className="text-[#E5C100] flex-shrink-0" />
-                <span className="text-cyan-100 ">rajukshatriyamahilasangha2024@gmail.com</span>
+                <a
+                  href="mailto:rajukshatriyamahilasangha2024@gmail.com"
+                  className="notranslate text-cyan-100 hover:text-[#E5C100] transition-colors underline-offset-2 hover:underline"
+                  translate="no"
+                >
+                  rajukshatriyamahilasangha2024@gmail.com
+                </a>
               </div>
             </div>
 

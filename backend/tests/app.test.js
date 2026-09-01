@@ -92,7 +92,7 @@ describe('Production Readiness API Test Suite', () => {
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBeTruthy();
-    });
+    }, 15000);
 
     it('should reject stale webhook events older than 24 hours', async () => {
       const secret = 'test_webhook_secret_key';

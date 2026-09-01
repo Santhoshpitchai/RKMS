@@ -32,16 +32,25 @@ app.use(cors({
 
 // Rate Limiting Engine
 
-// 1. General API Rate Limiter (150 requests per 15 mins per IP)
+// 1. Admin API Rate Limiter (2000 requests per 15 mins per IP - high ceiling for admin dashboard)
+const adminApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many admin dashboard requests. Please try again in a few minutes.' }
+});
+
+// 2. General Public API Rate Limiter (1000 requests per 15 mins per IP)
 const globalApiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 150,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests from this IP. Please try again after 15 minutes.' }
 });
 
-// 2. Strict Auth & OTP Rate Limiter (15 requests per 15 mins per IP)
+// 3. Strict Auth & OTP Rate Limiter (15 requests per 15 mins per IP for brute-force protection)
 const strictAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 15,
@@ -50,15 +59,15 @@ const strictAuthLimiter = rateLimit({
   message: { success: false, message: 'Too many authentication attempts from this IP. Please wait 15 minutes.' }
 });
 
-// Apply global rate limiter to all API endpoints
+// Apply rate limiters to routes
+app.use('/api/admin/', adminApiLimiter);
 app.use('/api/', globalApiLimiter);
 
-// Apply strict rate limiters to authentication & payment initiation endpoints
+// Apply strict rate limiters to authentication endpoints
 app.use('/api/user/login', strictAuthLimiter);
 app.use('/api/user/send-otp', strictAuthLimiter);
 app.use('/api/user/register', strictAuthLimiter);
 app.use('/api/admin/login', strictAuthLimiter);
-app.use('/api/membership/create-order', strictAuthLimiter);
 
 // Body Parsers & Security Headers (with rawBody capture for Webhook HMAC verification)
 app.use(express.json({
@@ -78,8 +87,14 @@ app.use((req, res, next) => {
 
 app.use('/uploads', express.static(path.resolve(process.env.UPLOAD_PATH || './uploads')));
 
+const { sseHandler } = require('./services/realtimeService');
+
+// SSE Real-time Updates Stream
+app.get('/api/realtime/stream', sseHandler);
+
 // Routes
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/site-content', require('./routes/siteContent'));
 app.use('/api/membership', require('./routes/membership'));
 app.use('/api/donation', require('./routes/donation'));
 app.use('/api/admin', require('./routes/admin'));

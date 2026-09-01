@@ -15,7 +15,7 @@ interface Transaction {
   type: 'donation' | 'membership' | 'event';
   amount: number;
   created_at: string;
-  status: 'completed' | 'pending' | 'failed';
+  status: 'completed' | 'pending' | 'failed' | 'cancelled';
   payment_id?: string;
   order_id?: string;
   membership_id?: string;
@@ -29,7 +29,7 @@ export function PaymentManagement() {
   const isLight = theme === 'light';
 
   const [filterType, setFilterType] = useState<'all' | 'donation' | 'membership' | 'event'>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed' | 'cancelled'>('all');
   const [filterDonationPurpose, setFilterDonationPurpose] = useState<'all' | 'Scholarship' | 'Health' | 'General' | 'Education'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -38,34 +38,47 @@ export function PaymentManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => {
+  const fetchPayments = async () => {
     const token = localStorage.getItem('adminToken');
-    if (!token) {
-      toast.error('Please login to access payments');
-      return;
-    }
+    if (!token) return;
 
-    const fetchPayments = async () => {
-      try {
-        setIsLoading(true);
-        const response = await adminApi.getPayments(token, currentPage, 10);
-        if (response.success && response.payments) {
-          setTransactions(response.payments);
-          if (response.pagination) {
-            setTotalPages(response.pagination.totalPages || 1);
-          }
-        } else {
-          toast.error('Failed to fetch payments');
+    try {
+      setIsLoading(true);
+      const response = await adminApi.getPayments(token, currentPage, 10);
+      if (response.success && response.payments) {
+        setTransactions(response.payments);
+        if (response.pagination) {
+          setTotalPages(response.pagination.totalPages || 1);
         }
-      } catch (e) {
-        console.error('Error fetching payments:', e);
-        toast.error('Failed to fetch payments');
-      } finally {
-        setIsLoading(false);
       }
-    };
+    } catch (e) {
+      console.error('Error fetching payments:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchPayments();
+
+    // Realtime SSE listener
+    let sse: EventSource | null = null;
+    try {
+      const apiOrigin = window.location.hostname === 'localhost' ? 'http://localhost:5001/api' : '/api';
+      sse = new EventSource(`${apiOrigin}/realtime/stream`);
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (['payment_completed', 'payment_cancelled', 'payment_updated'].includes(data.type)) {
+            fetchPayments();
+          }
+        } catch (e) {}
+      };
+    } catch (err) {}
+
+    return () => {
+      if (sse) sse.close();
+    };
   }, [currentPage]);
 
   const amt = (t: Transaction) => Number(t.amount) || 0;
@@ -83,10 +96,11 @@ export function PaymentManagement() {
     return matchesType && matchesStatus && matchesPurpose && matchesStart && matchesEnd;
   });
 
-  const totalAmount = filteredTransactions.reduce((sum, t) => sum + amt(t), 0);
-  const totalDonations = filteredTransactions.filter(t => t.type === 'donation').reduce((sum, t) => sum + amt(t), 0);
-  const totalMemberships = filteredTransactions.filter(t => t.type === 'membership').reduce((sum, t) => sum + amt(t), 0);
-  const totalEventFees = filteredTransactions.filter(t => t.type === 'event').reduce((sum, t) => sum + amt(t), 0);
+  const confirmedTransactions = filteredTransactions.filter(t => t.status === 'completed');
+  const totalAmount = confirmedTransactions.reduce((sum, t) => sum + amt(t), 0);
+  const totalDonations = confirmedTransactions.filter(t => t.type === 'donation').reduce((sum, t) => sum + amt(t), 0);
+  const totalMemberships = confirmedTransactions.filter(t => t.type === 'membership').reduce((sum, t) => sum + amt(t), 0);
+  const totalEventFees = confirmedTransactions.filter(t => t.type === 'event').reduce((sum, t) => sum + amt(t), 0);
 
   const donationByPurpose = {
     Scholarship: filteredTransactions.filter(t => t.type === 'donation' && t.purpose === 'Scholarship').reduce((s, t) => s + amt(t), 0),
@@ -248,6 +262,7 @@ export function PaymentManagement() {
                 <option value="all">All Statuses</option>
                 <option value="completed">Completed</option>
                 <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
                 <option value="failed">Failed</option>
               </select>
             </div>
@@ -333,7 +348,10 @@ export function PaymentManagement() {
                       <td className={`py-3.5 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{new Date(tx.created_at).toLocaleDateString()}</td>
                       <td className="py-3.5 px-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                          tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' :
+                          tx.status === 'cancelled' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
+                          tx.status === 'failed' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' :
+                          'bg-sky-500/10 text-sky-600 border border-sky-500/20'
                         }`}>
                           {tx.status}
                         </span>

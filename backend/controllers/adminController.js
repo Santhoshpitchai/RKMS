@@ -255,10 +255,11 @@ const getPayments = async (req, res) => {
         const skip = (page - 1) * limit;
 
         if (isSupabaseConfigured()) {
-            const { count: total } = await supabase.from('payments').select('*', { count: 'exact', head: true });
+            const { count: total } = await supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'completed');
             const { data: payments } = await supabase
                 .from('payments')
                 .select('*')
+                .eq('status', 'completed')
                 .order('created_at', { ascending: false })
                 .range(skip, skip + limit - 1);
 
@@ -286,12 +287,13 @@ const getPayments = async (req, res) => {
                     m.name, m.email, m.membership_id
              FROM payments p
              LEFT JOIN members m ON p.member_id = m.id
+             WHERE p.status = 'completed'
              ORDER BY p.created_at DESC
              LIMIT ? OFFSET ?`,
             [limit, skip]
         );
 
-        const [[countResult]] = await pool.query('SELECT COUNT(*) AS total FROM payments');
+        const [[countResult]] = await pool.query("SELECT COUNT(*) AS total FROM payments WHERE status = 'completed'");
         const total = countResult?.total || 0;
 
         const paymentsNormalized = payments.map((p) => ({

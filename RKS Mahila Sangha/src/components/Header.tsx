@@ -114,14 +114,22 @@ export function Header() {
             ))}
 
             {/* Language Switcher Toggle */}
-            <button
-              onClick={() => triggerGoogleTranslate(lang === 'en' ? 'kn' : 'en')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#0A6C87]/30 bg-cyan-50 text-[#0A6C87] text-xs font-extrabold hover:bg-cyan-100 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
-              title="Switch Language / ಭಾಷೆಯನ್ನು ಬದಲಾಯಿಸಿ"
-            >
-              <Languages className="w-4 h-4 text-[#0A6C87] flex-shrink-0" />
-              <span>{lang === 'en' ? 'ಕನ್ನಡ' : 'English'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => triggerGoogleTranslate(lang === 'en' ? 'kn' : 'en')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#0A6C87]/30 bg-cyan-50 text-[#0A6C87] text-xs font-extrabold hover:bg-cyan-100 transition-colors shadow-sm whitespace-nowrap"
+                title="Switch Language / ಭಾಷೆಯನ್ನು ಬದಲಾಯಿಸಿ"
+              >
+                <Languages className="w-4 h-4 text-[#0A6C87] flex-shrink-0" />
+                <span>{lang === 'en' ? 'ಕನ್ನಡ' : 'English'}</span>
+              </button>
+              {lang === 'kn' && (
+                <span className="notranslate flex items-center gap-1 text-[9px] font-semibold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-1 rounded-full whitespace-nowrap">
+                  <img src="https://www.google.com/favicon.ico" alt="G" className="w-3 h-3" />
+                  Translated by Google
+                </span>
+              )}
+            </div>
 
             {/* User Account / Auth Button */}
             {user ? (

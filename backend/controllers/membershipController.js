@@ -204,19 +204,32 @@ const verifyMembershipPayment = async (req, res) => {
       }
 
       // Record completed payment in Supabase
-      await supabase.from('payments').insert([{
-        member_id: memberData ? memberData.id : null,
-        type: 'membership',
-        amount: settings.membershipFee || 1001,
-        status: 'completed',
-        payment_id: razorpay_payment_id || `PAY_${Date.now()}`,
-        order_id: razorpay_order_id || `ORDER_${Date.now()}`,
-        signature: razorpay_signature || 'SIMULATED',
-        donor_name: name,
-        donor_email: email,
-        donor_phone: phone,
-        address: `${address}, ${city}`
-      }]);
+      let { data: updatedPayment } = await supabase
+        .from('payments')
+        .update({
+          member_id: memberData ? memberData.id : null,
+          status: 'completed',
+          payment_id: razorpay_payment_id || `PAY_${Date.now()}`,
+          signature: razorpay_signature || 'SIMULATED',
+        })
+        .eq('order_id', razorpay_order_id)
+        .select();
+
+      if (!updatedPayment || updatedPayment.length === 0) {
+        await supabase.from('payments').insert([{
+          member_id: memberData ? memberData.id : null,
+          type: 'membership',
+          amount: settings.membershipFee || 1001,
+          status: 'completed',
+          payment_id: razorpay_payment_id || `PAY_${Date.now()}`,
+          order_id: razorpay_order_id || `ORDER_${Date.now()}`,
+          signature: razorpay_signature || 'SIMULATED',
+          donor_name: name,
+          donor_email: email,
+          donor_phone: phone,
+          address: `${address}, ${city}`
+        }]);
+      }
 
       try {
         await sendMembershipConfirmationEmail(email, name, membership_id);
@@ -261,11 +274,18 @@ const verifyMembershipPayment = async (req, res) => {
 
     const memberId = memberResult.insertId;
 
-    await pool.query(
-      `INSERT INTO payments (member_id, type, amount, status, payment_id, order_id, donor_name, donor_email, donor_phone)
-       VALUES (?, 'membership', ?, 'completed', ?, ?, ?, ?, ?)`,
-      [memberId, settings.membershipFee, razorpay_payment_id || `PAY_${Date.now()}`, razorpay_order_id, name, email, phone]
+    const [updateResult] = await pool.query(
+      `UPDATE payments SET member_id = ?, status = 'completed', payment_id = ? WHERE order_id = ?`,
+      [memberId, razorpay_payment_id || `PAY_${Date.now()}`, razorpay_order_id]
     );
+
+    if (updateResult.affectedRows === 0) {
+      await pool.query(
+        `INSERT INTO payments (member_id, type, amount, status, payment_id, order_id, donor_name, donor_email, donor_phone)
+         VALUES (?, 'membership', ?, 'completed', ?, ?, ?, ?, ?)`,
+        [memberId, settings.membershipFee, razorpay_payment_id || `PAY_${Date.now()}`, razorpay_order_id, name, email, phone]
+      );
+    }
 
     try {
       await sendMembershipConfirmationEmail(email, name, membership_id);
@@ -323,6 +343,7 @@ const getMembershipStatus = async (req, res) => {
             .from('payments')
             .select('*')
             .or(`donor_email.eq.${email},member_id.eq.${member.id}`)
+            .eq('status', 'completed')
             .order('created_at', { ascending: false });
 
           if (supaPayments) {

@@ -7,6 +7,7 @@ import logo from '../assets/RKMS Logo.png';
 import { eventsApi, resolveBackendAssetUrl } from '../services/api';
 import { MemberDashboard } from './MemberDashboard';
 import { useLanguage } from '../context/LanguageContext';
+import { useSiteImage } from '../services/useSiteContent';
 
 // Real Leadership Team Assets
 import shanthaImg from '../assets/Shantha Kondur.png';
@@ -35,6 +36,10 @@ export function LandingPage() {
   const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
   const [user, setUser] = useState<{ name: string; email: string; phone?: string } | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [expandedLandingEvents, setExpandedLandingEvents] = useState<{ [id: number]: boolean }>({});
+
+  // Dynamic Hero Image managed via Admin Panel
+  const dynamicHero = useSiteImage('landing_hero', heroImage);
 
   const checkUserSession = () => {
     const storedUser = localStorage.getItem('userData');
@@ -152,13 +157,13 @@ export function LandingPage() {
       
       {/* 1. Hero Banner - Background Image VISIBLE with Balanced Overlay */}
       <section className="relative bg-[#0A6C87] text-white py-20 md:py-28 overflow-hidden">
-        {/* Background Image Clearly Visible */}
+        {/* Background Image Fully Visible */}
         <div 
-          className="absolute inset-0 bg-cover bg-center transition-all duration-700 opacity-60"
-          style={{ backgroundImage: `url(${heroImage})` }}
+          className="absolute inset-0 bg-cover bg-center transition-all duration-700 opacity-100"
+          style={{ backgroundImage: `url(${dynamicHero})` }}
         ></div>
-        {/* Transparent Overlay keeping text crisp & legible */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0A6C87]/90 via-[#0A6C87]/75 to-cyan-950/40"></div>
+        {/* Sleek Dark Overlay to ensure 100% image clarity + text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-900/50 to-black/30"></div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-12 gap-8 items-center">
@@ -453,7 +458,19 @@ export function LandingPage() {
                     </div>
                     <div className="p-5 space-y-2">
                       <h4 className="font-bold text-gray-900 text-base line-clamp-1">{evt.title}</h4>
-                      <p className="text-xs text-gray-600 line-clamp-2">{evt.description}</p>
+                      <div>
+                        <p className={`text-xs text-gray-600 ${expandedLandingEvents[evt.id] ? '' : 'line-clamp-2'}`}>
+                          {evt.description}
+                        </p>
+                        {evt.description && evt.description.length > 90 && (
+                          <button
+                            onClick={() => setExpandedLandingEvents(prev => ({ ...prev, [evt.id]: !prev[evt.id] }))}
+                            className="text-[11px] font-bold text-[#0A6C87] hover:underline mt-1 focus:outline-none"
+                          >
+                            {expandedLandingEvents[evt.id] ? 'Show Less ▲' : 'Read More ▼'}
+                          </button>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-500 pt-2 border-t space-y-1">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3.5 h-3.5 text-[#0A6C87]" />

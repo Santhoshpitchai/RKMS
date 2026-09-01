@@ -7,6 +7,8 @@ import { MemberManagement } from './components/admin/MemberManagement';
 import { PaymentManagement } from './components/admin/PaymentManagement';
 import { SettingsManagement } from './components/admin/SettingsManagement';
 import { AuditLogs } from './components/admin/AuditLogs';
+import { PageImagesManager } from './components/admin/PageImagesManager';
+import { ProtectedRoute } from './components/admin/ProtectedRoute';
 import { ThemeProvider } from './context/ThemeContext';
 
 export default function App() {
@@ -18,14 +20,17 @@ export default function App() {
         {/* Redirect root to admin login */}
         <Route path="/" element={<Navigate to="/admin/login" replace />} />
         
-        {/* Admin Routes */}
+        {/* Public Admin Route */}
         <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/events" element={<EventManagement />} />
-        <Route path="/admin/members" element={<MemberManagement />} />
-        <Route path="/admin/payments" element={<PaymentManagement />} />
-        <Route path="/admin/settings" element={<SettingsManagement />} />
-        <Route path="/admin/audit-logs" element={<AuditLogs />} />
+
+        {/* Protected Admin Routes */}
+        <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/events" element={<ProtectedRoute><EventManagement /></ProtectedRoute>} />
+        <Route path="/admin/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
+        <Route path="/admin/payments" element={<ProtectedRoute><PaymentManagement /></ProtectedRoute>} />
+        <Route path="/admin/page-images" element={<ProtectedRoute><PageImagesManager /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute><SettingsManagement /></ProtectedRoute>} />
+        <Route path="/admin/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
 
         {/* Catch all - redirect to admin login */}
         <Route path="*" element={<Navigate to="/admin/login" replace />} />

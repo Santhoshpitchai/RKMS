@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
-import { membershipApi, donationApi, eventsApi, settingsApi, API_BASE_URL } from '../services/api';
+import { membershipApi, donationApi, eventsApi, settingsApi, paymentApi, API_BASE_URL } from '../services/api';
 import logo from '../assets/RKMS Logo.png';
 import { EventRegistrationModal } from './EventRegistrationModal';
 import { useLanguage } from '../context/LanguageContext';
@@ -179,12 +179,29 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
   const [eventsList, setEventsList] = useState<any[]>([]);
   const [eventFilter, setEventFilter] = useState<'all' | 'upcoming' | 'past'>('all');
 
+  const [donationsHistory, setDonationsHistory] = useState<any[]>([]);
+  const [eventRegistrationsHistory, setEventRegistrationsHistory] = useState<any[]>([]);
+
   const loadMemberData = async () => {
+    const token = localStorage.getItem('userToken');
+    if (token) {
+      try {
+        const historyRes = await userApi.getHistory(token);
+        if (historyRes && historyRes.success) {
+          if (historyRes.membership) setMembership(historyRes.membership);
+          if (historyRes.donations) setDonationsHistory(historyRes.donations);
+          if (historyRes.eventRegistrations) setEventRegistrationsHistory(historyRes.eventRegistrations);
+        }
+      } catch (err) {
+        console.warn('History load error:', err);
+      }
+    }
+
     if (user.email) {
       try {
         const res = await membershipApi.getStatus(user.email);
         if (res && res.exists && res.member) {
-          setMembership(res.member);
+          setMembership((prev: any) => prev || res.member);
           if (res.payments) setPayments(res.payments);
         }
       } catch (err) {
@@ -211,71 +228,102 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
   useEffect(() => {
     loadMemberData();
     loadEvents();
-    const interval = setInterval(loadEvents, 4000);
-    return () => clearInterval(interval);
+    
+    // Connect to Backend Real-Time Event Stream (SSE)
+    let sse: EventSource | null = null;
+    try {
+      sse = new EventSource(`${API_BASE_URL}/realtime/stream`);
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (['payment_completed', 'payment_cancelled', 'payment_updated', 'events_updated'].includes(data.type)) {
+            loadMemberData();
+            loadEvents();
+          }
+        } catch (e) {}
+      };
+    } catch (err) {
+      console.warn('SSE stream notice:', err);
+    }
+
+    const interval = setInterval(loadEvents, 10000);
+    return () => {
+      if (sse) sse.close();
+      clearInterval(interval);
+    };
   }, [user.email]);
 
-  // Card Print/Download
+  // Download Certificate / Card Print
   const handleDownloadCard = () => {
     if (!membership) return;
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      toast.error('Please allow popups to print/download your membership card');
+      toast.error('Please allow popups to print/download your certificate');
       return;
     }
+
+    const memberName = membership.fullName || user.name;
+    const memberId = membership.memberId || membership.membership_id;
+    const regDate = membership.registrationDate || membership.created_at || 'Active';
+    const payId = membership.paymentId || 'PAY_LIFETIME_ACTIVE';
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>RKS Mahila Sangha - Digital Membership Card</title>
+        <title>RKS Sangha - Lifetime Membership Certificate</title>
         <style>
-          body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f3f4f6; margin: 0; }
-          .card { width: 450px; background: linear-gradient(135deg, #0A6C87 0%, #0891b2 100%); color: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-          .logo { width: 50px; height: 50px; background: white; border-radius: 50%; padding: 5px; }
-          .title { text-align: right; }
-          .title h3 { margin: 0; font-size: 16px; font-weight: bold; }
-          .title p { margin: 2px 0 0 0; font-size: 12px; opacity: 0.9; }
-          .content { background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-          .field { margin-bottom: 10px; }
-          .field label { font-size: 11px; opacity: 0.8; display: block; text-transform: uppercase; }
-          .field span { font-size: 16px; font-weight: bold; }
-          .id-val { color: #E5C100; font-family: monospace; font-size: 18px; }
-          .footer { display: flex; justify-content: space-between; font-size: 12px; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 10px; }
+          body { font-family: 'Georgia', serif; background: #f8fafc; margin: 0; padding: 30px; display: flex; justify-content: center; }
+          .cert-container { width: 750px; background: white; border: 12px double #0A6C87; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; color: #1e293b; }
+          .cert-header { margin-bottom: 20px; }
+          .logo { width: 80px; height: 80px; margin-bottom: 10px; }
+          .org-name { font-size: 24px; font-weight: bold; color: #0A6C87; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+          .org-sub { font-size: 15px; color: #0891b2; margin-top: 4px; font-weight: 600; }
+          .address-box { font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.5; font-family: sans-serif; }
+          .cert-title { font-size: 22px; font-weight: bold; color: #d97706; margin: 25px 0 15px 0; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #fef3c7; display: inline-block; padding-bottom: 5px; }
+          .cert-body { font-size: 15px; line-height: 1.8; margin: 20px 0; }
+          .member-name { font-size: 28px; font-weight: bold; color: #0A6C87; font-family: 'Times New Roman', serif; text-decoration: underline; margin: 10px 0; }
+          .grid-details { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f0fdfa; border: 1px solid #ccfbf1; padding: 15px; border-radius: 8px; margin: 25px 0; text-align: left; font-family: sans-serif; font-size: 13px; }
+          .grid-item label { color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold; display: block; }
+          .grid-item span { font-weight: bold; color: #0f172a; }
+          .thank-you { font-style: italic; font-size: 13px; color: #475569; margin: 20px 0; line-height: 1.6; }
+          .cert-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; font-family: sans-serif; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
         </style>
       </head>
       <body>
-        <div class="card">
-          <div class="header">
+        <div class="cert-container">
+          <div class="cert-header">
             <img src="${logo}" class="logo" />
-            <div class="title">
-              <h3>Raju Kshatriya Mahila Sangha</h3>
-              <p>Official Digital Membership Card</p>
+            <h1 class="org-name">Raju Kshatriya Mahila Sangha</h1>
+            <div class="org-sub">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ</div>
+            <div class="address-box">
+              No. 797, "Lakshmi Nilayam", 1st Floor, Banashankari 6th Stage, 1st Block, Parallel to BDA Link Road,<br/>
+              Rajarajeshwari Nagar Post, Bengaluru-560 098. | Contact: +91 9972648909 | rajukshatriyamahilasangha2024@gmail.com
             </div>
           </div>
-          <div class="content">
-            <div class="field">
-              <label>Member Name</label>
-              <span>${membership.fullName}</span>
-            </div>
-            <div class="field">
-              <label>Membership ID</label>
-              <span class="id-val">${membership.memberId}</span>
-            </div>
-            <div class="field">
-              <label>Registration Date</label>
-              <span>${membership.registrationDate}</span>
-            </div>
+          <div class="cert-title">Certificate of Lifetime Membership</div>
+          <div class="cert-body">
+            This is to proudly certify that
+            <div class="member-name">${memberName}</div>
+            has been admitted as a distinguished <strong>Lifetime Member</strong> of Raju Kshatriya Mahila Sangha.
           </div>
-          <div class="footer">
-            <span>✓ Verified Member</span>
-            <span>RKS Mahila Sangha</span>
+          <div class="grid-details">
+            <div class="grid-item"><label>Membership ID</label><span style="color:#0A6C87; font-family:monospace; font-size:15px;">${memberId}</span></div>
+            <div class="grid-item"><label>Membership Status</label><span style="color:#16a34a;">ACTIVE / VERIFIED</span></div>
+            <div class="grid-item"><label>Payment ID</label><span>${payId}</span></div>
+            <div class="grid-item"><label>Purchase / Reg Date</label><span>${regDate}</span></div>
+            <div class="grid-item"><label>Membership Type</label><span>Lifetime Membership</span></div>
+            <div class="grid-item"><label>Amount Paid</label><span>₹1,001.00</span></div>
+          </div>
+          <div class="thank-you">
+            "Thank you for becoming a lifetime member of Raju Kshatriya Mahila Sangha. Your valuable membership supports our initiatives in women empowerment, education, healthcare checkups, and community welfare across Karnataka."
+          </div>
+          <div class="cert-footer">
+            <div>Date: ${new Date().toLocaleDateString('en-IN')}</div>
+            <div><strong>Authorized Signatory</strong><br/>RKS Mahila Sangha</div>
           </div>
         </div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
+        <script>window.onload = function() { window.print(); }</script>
       </body>
       </html>
     `);
@@ -349,6 +397,12 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
               toast.error(verifyRes.message || 'Payment verification failed');
             }
           },
+          modal: {
+            ondismiss: function () {
+              paymentApi.cancelOrder(orderRes.order.id, 'User closed membership window');
+              toast.info('Membership payment was cancelled.');
+            },
+          },
           prefill: {
             name: membershipForm.fullName,
             email: membershipForm.email,
@@ -420,6 +474,12 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
             } else {
               toast.error(verifyRes.message || 'Donation payment verification failed');
             }
+          },
+          modal: {
+            ondismiss: function () {
+              paymentApi.cancelOrder(orderRes.order.id, 'User closed donation window');
+              toast.info('Donation payment was cancelled.');
+            },
           },
           prefill: {
             name: user.name,
@@ -660,7 +720,12 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-[#0A6C87]">₹{p.amount?.toLocaleString('en-IN')}</p>
-                          <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            String(p.status).toLowerCase() === 'completed' ? 'bg-green-100 text-green-700' :
+                            String(p.status).toLowerCase() === 'cancelled' ? 'bg-amber-100 text-amber-700' :
+                            String(p.status).toLowerCase() === 'failed' ? 'bg-red-100 text-red-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
                             {p.status || 'COMPLETED'}
                           </span>
                         </div>
@@ -1254,14 +1319,13 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
           </div>
         )}
 
+        <EventRegistrationModal
+          isOpen={showEventRegModal}
+          onClose={() => setShowEventRegModal(false)}
+          event={selectedEventModal}
+          userSession={user}
+        />
       </div>
-
-      <EventRegistrationModal
-        isOpen={showEventRegModal}
-        onClose={() => setShowEventRegModal(false)}
-        event={selectedEventModal}
-        userSession={user}
-      />
     </div>
   );
 }

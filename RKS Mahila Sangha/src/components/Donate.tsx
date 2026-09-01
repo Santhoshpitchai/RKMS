@@ -2,7 +2,7 @@ import { Heart, CreditCard, ShieldCheck, CheckCircle2, Download, Sparkles, BookO
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { settingsApi, donationApi } from '../services/api';
+import { settingsApi, donationApi, paymentApi } from '../services/api';
 import { UserAuthModal } from './UserAuthModal';
 
 interface Settings {
@@ -125,6 +125,12 @@ export function Donate() {
               name: donorName,
               email: donorEmail,
             });
+          },
+          modal: {
+            ondismiss: function () {
+              paymentApi.cancelOrder(response.order.id, 'User closed donation checkout');
+              toast.info('Donation payment was cancelled.');
+            },
           },
           prefill: {
             name: donorName,

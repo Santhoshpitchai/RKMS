@@ -1,6 +1,7 @@
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useState } from 'react';
 import { Award, ChevronDown, ChevronUp, UserCheck, ShieldCheck, Heart, Sparkles } from 'lucide-react';
+import { useSiteImage } from '../services/useSiteContent';
 import smtIndira from '../assets/Smt. Indira.png';
 import shanthaKondur from '../assets/Shantha Kondur.png';
 import babhithaNadampalli from '../assets/Babitha Nadampalli Sreedhara Raju.png';
@@ -13,6 +14,12 @@ export function AboutUs() {
   const [activeTab, setActiveTab] = useState("current");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [expandedBio, setExpandedBio] = useState<number | null>(null);
+
+  // Dynamic image from admin panel (falls back to stock photo)
+  const historyImage = useSiteImage(
+    'about_us_hero',
+    'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=1080'
+  );
 
   const currentMembers = [
     {
@@ -101,7 +108,7 @@ export function AboutUs() {
           </div>
           <div>
             <ImageWithFallback
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=1080"
+              src={historyImage}
               alt="Women empowerment gathering"
               className="rounded-2xl shadow-xl border border-gray-100"
             />

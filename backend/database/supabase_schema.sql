@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS payments (
     event_id INT REFERENCES events(id) ON DELETE SET NULL,
     type VARCHAR(20) NOT NULL CHECK (type IN ('membership', 'event', 'donation')),
     amount NUMERIC(10,2) NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled')),
     order_id VARCHAR(100),       -- Razorpay Order ID (order_...)
     payment_id VARCHAR(100),     -- Razorpay Payment ID (pay_...)
     signature VARCHAR(255),      -- Razorpay Signature HMAC
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS event_registrations (
     number_of_attendees INT DEFAULT 1,
     guest_names TEXT,
     membership_id VARCHAR(30),
-    payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed', 'failed')),
+    payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed', 'failed', 'cancelled')),
     payment_amount NUMERIC(10,2) DEFAULT 0,
     payment_id VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -149,3 +149,43 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 INSERT INTO settings (id, membership_fee, donation_suggestions, contact_email, organization_name) 
 VALUES (1, 1001, '[500, 1000, 2500, 5000, 10000]'::jsonb, 'info@rksmahilavedike.org', 'Raju Kshatriya Mahila Sangha')
 ON CONFLICT (id) DO NOTHING;
+
+-- ====================================================================
+-- 9. Row Level Security (RLS) Enablement & Access Control
+-- ====================================================================
+ALTER TABLE IF EXISTS public.admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.event_registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.site_content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.webhook_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public events read access" ON public.events;
+DROP POLICY IF EXISTS "Public settings read access" ON public.settings;
+DROP POLICY IF EXISTS "Public site content read access" ON public.site_content;
+
+CREATE POLICY "Public events read access" ON public.events FOR SELECT USING (true);
+CREATE POLICY "Public settings read access" ON public.settings FOR SELECT USING (true);
+CREATE POLICY "Public site content read access" ON public.site_content FOR SELECT USING (true);
+
+-- ====================================================================
+-- 10. Event Images Table (Multiple photos per event – run as migration)
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS event_images (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    image_url TEXT NOT NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE IF EXISTS public.event_images ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public event images read access" ON public.event_images;
+CREATE POLICY "Public event images read access" ON public.event_images FOR SELECT USING (true);
+
+-- 11. Event Registrations – add registration_id column (run as migration)
+ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS registration_id VARCHAR(50);
+

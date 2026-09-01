@@ -2,7 +2,7 @@ import { UserPlus, CreditCard, CheckCircle2, Download, ShieldCheck, IdCard, Spar
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { settingsApi, membershipApi } from '../services/api';
+import { settingsApi, membershipApi, paymentApi } from '../services/api';
 import logo from '../assets/RKMS Logo.png';
 import { UserAuthModal } from './UserAuthModal';
 
@@ -150,6 +150,12 @@ export function Membership() {
           handler: async function (razorpayResponse: any) {
             await verifyAndCreateMembership(razorpayResponse, data);
           },
+          modal: {
+            ondismiss: function () {
+              paymentApi.cancelOrder(orderResponse.order.id, 'User closed checkout window');
+              toast.info('Membership payment was cancelled.');
+            },
+          },
           prefill: {
             name: data.fullName,
             email: data.email,
@@ -276,10 +282,82 @@ export function Membership() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-cyan-100 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-cyan-100 pt-2 border-t border-white/10">
                 <span className="flex items-center gap-1.5 font-semibold">
-                  <ShieldCheck className="w-4 h-4 text-green-300" /> Verified Lifetime Membership
+                  <ShieldCheck className="w-4 h-4 text-green-300" /> Verified Lifetime Membership (₹1,001)
                 </span>
+                <button
+                  onClick={() => {
+                    const printWindow = window.open('', '_blank');
+                    if (!printWindow) {
+                      toast.error('Please allow popups to download certificate');
+                      return;
+                    }
+                    printWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <title>RKS Sangha - Lifetime Membership Certificate</title>
+                        <style>
+                          body { font-family: 'Georgia', serif; background: #f8fafc; margin: 0; padding: 40px; display: flex; justify-content: center; }
+                          .cert-container { width: 750px; background: white; border: 12px double #0A6C87; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; color: #1e293b; }
+                          .cert-header { margin-bottom: 20px; }
+                          .logo { width: 80px; height: 80px; margin-bottom: 10px; }
+                          .org-name { font-size: 24px; font-weight: bold; color: #0A6C87; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+                          .org-sub { font-size: 15px; color: #0891b2; margin-top: 4px; font-weight: 600; }
+                          .address-box { font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.5; font-family: sans-serif; }
+                          .cert-title { font-size: 22px; font-weight: bold; color: #d97706; margin: 25px 0 15px 0; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid #fef3c7; display: inline-block; padding-bottom: 5px; }
+                          .cert-body { font-size: 15px; line-height: 1.8; margin: 20px 0; }
+                          .member-name { font-size: 28px; font-weight: bold; color: #0A6C87; font-family: 'Times New Roman', serif; text-decoration: underline; margin: 10px 0; }
+                          .grid-details { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f0fdfa; border: 1px solid #ccfbf1; padding: 15px; border-radius: 8px; margin: 25px 0; text-align: left; font-family: sans-serif; font-size: 13px; }
+                          .grid-item label { color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold; display: block; }
+                          .grid-item span { font-weight: bold; color: #0f172a; }
+                          .thank-you { font-style: italic; font-size: 13px; color: #475569; margin: 20px 0; line-height: 1.6; }
+                          .cert-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; font-family: sans-serif; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="cert-container">
+                          <div class="cert-header">
+                            <img src="${logo}" class="logo" />
+                            <h1 class="org-name">Raju Kshatriya Mahila Sangha</h1>
+                            <div class="org-sub">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ</div>
+                            <div class="address-box">
+                              No. 797, "Lakshmi Nilayam", 1st Floor, Banashankari 6th Stage, 1st Block, Parallel to BDA Link Road,<br/>
+                              Rajarajeshwari Nagar Post, Bengaluru-560 098. | Contact: +91 9972648909 | rajukshatriyamahilasangha2024@gmail.com
+                            </div>
+                          </div>
+                          <div class="cert-title">Certificate of Lifetime Membership</div>
+                          <div class="cert-body">
+                            This is to proudly certify that
+                            <div class="member-name">${membershipData.fullName}</div>
+                            has been admitted as a distinguished <strong>Lifetime Member</strong> of Raju Kshatriya Mahila Sangha.
+                          </div>
+                          <div class="grid-details">
+                            <div class="grid-item"><label>Membership ID</label><span style="color:#0A6C87; font-family:monospace; font-size:15px;">${membershipData.memberId}</span></div>
+                            <div class="grid-item"><label>Membership Status</label><span style="color:#16a34a;">ACTIVE / VERIFIED</span></div>
+                            <div class="grid-item"><label>Purchase / Reg Date</label><span>${membershipData.registrationDate}</span></div>
+                            <div class="grid-item"><label>Membership Type</label><span>Lifetime Membership</span></div>
+                            <div class="grid-item"><label>Amount Paid</label><span>₹1,001.00</span></div>
+                          </div>
+                          <div class="thank-you">
+                            "Thank you for becoming a lifetime member of Raju Kshatriya Mahila Sangha. Your valuable membership supports our initiatives in women empowerment, education, healthcare checkups, and community welfare across Karnataka."
+                          </div>
+                          <div class="cert-footer">
+                            <div>Date: ${new Date().toLocaleDateString('en-IN')}</div>
+                            <div><strong>Authorized Signatory</strong><br/>RKS Mahila Sangha</div>
+                          </div>
+                        </div>
+                        <script>window.onload = function() { window.print(); }</script>
+                      </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                  }}
+                  className="bg-[#E5C100] text-[#0A6C87] hover:bg-[#CCA900] px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" /> Download Membership Certificate
+                </button>
               </div>
             </div>
           </div>

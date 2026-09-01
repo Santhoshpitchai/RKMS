@@ -1,6 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 @import 'tailwindcss';
 @import './styles/globals.css';
 
 @layer base {
-  html, body, #root { min-height: 100vh; height: 100%; margin: 0; }
+  html, body, #root { min-height: 100vh; height: 100%; margin: 0; font-family: 'Outfit', sans-serif; }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #334155;
+    border-radius: 999px;
+  }
+}
+
+@layer utilities {
+  .animate-glow {
+    animation: glow 3s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow {
+    from { box-shadow: 0 0 10px theme('colors.cyan.500/20'), 0 0 20px theme('colors.cyan.500/10'); }
+    to   { box-shadow: 0 0 25px theme('colors.cyan.500/40'), 0 0 50px theme('colors.cyan.500/20'); }
+  }
+
+  .glass {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-light {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
 }

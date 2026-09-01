@@ -401,10 +401,122 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+/**
+ * Get complete user activity history: membership, donations, event registrations
+ */
+const getUserHistory = async (req, res) => {
+  try {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+
+    const decoded = jwt.verify(token, secret);
+    const email = decoded.email;
+
+    if (!email) return res.status(400).json({ success: false, message: 'Invalid token payload' });
+
+    let membershipData = null;
+    let donationHistory = [];
+    let eventHistory = [];
+
+    if (isSupabaseConfigured()) {
+      // Membership
+      const { data: member } = await supabase
+        .from('members')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (member) {
+        // Get membership payment
+        const { data: memberPayment } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('member_id', member.id)
+          .eq('type', 'membership')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        membershipData = {
+          memberId: member.membership_id,
+          fullName: member.name,
+          email: member.email,
+          phone: member.phone,
+          city: member.city,
+          state: member.state,
+          registrationDate: member.created_at
+            ? new Date(member.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '-',
+          isActive: member.is_active,
+          paymentId: memberPayment ? (memberPayment.payment_id || memberPayment.order_id) : null,
+          amountPaid: memberPayment ? Number(memberPayment.amount) : 1001,
+          paymentStatus: memberPayment ? memberPayment.status : 'completed',
+        };
+      }
+
+      // Donations
+      const { data: donations } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('donor_email', email)
+        .eq('type', 'donation')
+        .order('created_at', { ascending: false });
+
+      donationHistory = (donations || []).map(d => ({
+        id: d.id,
+        amount: Number(d.amount),
+        paymentId: d.payment_id || d.order_id,
+        purpose: d.purpose || 'General Donation',
+        status: d.status,
+        date: d.created_at
+          ? new Date(d.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '-',
+      }));
+
+      // Event Registrations
+      const { data: registrations } = await supabase
+        .from('event_registrations')
+        .select('*, events(title, date, location)')
+        .eq('email', email)
+        .order('created_at', { ascending: false });
+
+      eventHistory = (registrations || []).map(r => ({
+        id: r.id,
+        registrationId: r.registration_id || `REG-${r.id}`,
+        eventTitle: r.events?.title || 'RKS Event',
+        eventDate: r.events?.date || null,
+        eventLocation: r.events?.location || null,
+        numberOfAttendees: r.number_of_attendees || 1,
+        paymentAmount: Number(r.payment_amount || 0),
+        paymentId: r.payment_id,
+        paymentStatus: r.payment_status,
+        isFree: Number(r.payment_amount || 0) === 0,
+        date: r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '-',
+      }));
+    }
+
+    return res.status(200).json({
+      success: true,
+      membership: membershipData,
+      donations: donationHistory,
+      eventRegistrations: eventHistory,
+    });
+  } catch (error) {
+    console.error('getUserHistory error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   registerUser,
   verifyUserOtp,
   resendUserOtp,
   loginUser,
   getUserProfile,
+  getUserHistory,
 };

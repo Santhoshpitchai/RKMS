@@ -1,49 +1,58 @@
 import { BookOpen, Users, Heart, Lightbulb, Calendar, Award } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { useSiteContent } from '../services/useSiteContent';
 
 export function Services() {
+  const { content } = useSiteContent();
+
   const services = [
     {
       icon: BookOpen,
+      key: 'service_educational',
       title: 'Educational Programs',
       description: 'We provide educational workshops, literacy programs, and skill development courses to empower women with knowledge and capabilities.',
-      image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600',
+      image: content['service_educational'] || 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600',
       impact: '500+ women trained annually',
     },
     {
       icon: Lightbulb,
+      key: 'service_skill',
       title: 'Skill Development',
       description: 'Vocational training programs in tailoring, handicrafts, computer skills, and entrepreneurship to enhance employability and self-reliance.',
-      image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600',
+      image: content['service_skill'] || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600',
       impact: '300+ women skilled in various trades',
     },
     {
       icon: Users,
+      key: 'service_community',
       title: 'Community Support',
       description: 'Building a strong support network for women through counseling services, peer support groups, and mentorship programs.',
-      image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600',
+      image: content['service_community'] || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600',
       impact: '1000+ active community members',
     },
     {
       icon: Heart,
+      key: 'service_welfare',
       title: 'Women Welfare',
       description: 'Providing assistance to women in need through healthcare support, financial aid, and legal guidance programs.',
-      image: 'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=600',
+      image: content['service_welfare'] || 'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=600',
       impact: '200+ families supported',
     },
     {
       icon: Calendar,
+      key: 'service_cultural',
       title: 'Cultural Activities',
       description: 'Organizing cultural events, traditional celebrations, and heritage preservation programs to keep our rich culture alive.',
-      image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600',
+      image: content['service_cultural'] || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600',
       impact: '50+ cultural events yearly',
     },
     {
       icon: Award,
+      key: 'service_family',
       title: 'Family Support',
       description: 'Strengthening family bonds through parenting workshops, marriage counseling, and family welfare programs.',
-      image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600',
+      image: content['service_family'] || 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600',
       impact: '150+ families counseled',
     },
   ];
@@ -74,15 +83,27 @@ export function Services() {
           {services.map((service, index) => (
             <div
               key={index}
-              className={`bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow ${
+              className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow flex flex-col md:flex ${
                 index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'
-              } flex flex-col md:flex`}
+              }`}
             >
-              <div className="md:w-1/2">
-                <ImageWithFallback
+              {/* Image area — objectFit:contain so the FULL image is always visible */}
+              <div
+                className="md:w-1/2 flex-shrink-0 flex items-center justify-center bg-gray-50"
+                style={{ minHeight: '300px', maxHeight: '360px' }}
+              >
+                <img
                   src={service.image}
                   alt={service.title}
-                  className="w-full h-64 md:h-full object-cover"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    minHeight: '300px',
+                    maxHeight: '360px',
+                    objectFit: 'contain',
+                    display: 'block',
+                    padding: '12px',
+                  }}
                 />
               </div>
               <div className="md:w-1/2 p-8 flex flex-col justify-center">
@@ -90,11 +111,12 @@ export function Services() {
                   <service.icon className="w-8 h-8 text-cyan-600" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{service.title}</h3>
-                <p className="text-gray-700 mb-4">{service.description}</p>
+                {/* Show admin-saved description if available, else show default */}
+                <p className="text-gray-700 mb-4">
+                  {content[`${service.key}_desc`] || service.description}
+                </p>
                 <div className="bg-cyan-50 rounded-lg p-4 inline-block">
-                  <p className="text-cyan-700 font-semibold">
-                    Impact: {service.impact}
-                  </p>
+                  <p className="text-cyan-700 font-semibold">Impact: {service.impact}</p>
                 </div>
               </div>
             </div>

@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const { razorpayInstance, razorpayKeyId } = require('../config/razorpay');
 const supabase = require('../config/supabaseClient');
+const pool = require('../database/mysql');
+const { broadcastRealtimeEvent } = require('../services/realtimeService');
 
 /**
  * Create a new Razorpay Order for Membership or Donation
@@ -265,6 +267,8 @@ const verifyPayment = async (req, res) => {
       }
     }
 
+    broadcastRealtimeEvent('payment_completed', { order_id: trustedOrderId, payment: activePayment });
+
     return res.status(200).json({
       success: true,
       message: 'Payment verified successfully',
@@ -285,6 +289,7 @@ const getPaymentHistory = async (req, res) => {
     const { data, error } = await supabase
       .from('payments')
       .select('*')
+      .eq('status', 'completed')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -454,6 +459,7 @@ const handleWebhook = async (req, res) => {
         .eq('event_id', eventId);
     }
 
+    broadcastRealtimeEvent('payment_updated', { order_id: orderId, event });
     return res.status(200).json({ success: true, message: 'Webhook processed successfully' });
   } catch (err) {
     console.error('Razorpay Webhook Error:', err);
@@ -468,9 +474,49 @@ const handleWebhook = async (req, res) => {
   }
 };
 
+/**
+ * Cancel payment order (when user closes/cancels Razorpay modal)
+ */
+const cancelOrder = async (req, res) => {
+  try {
+    const { order_id, reason } = req.body;
+
+    if (!order_id) {
+      return res.status(400).json({ success: false, error: 'order_id is required' });
+    }
+
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+      try {
+        await supabase
+          .from('payments')
+          .update({ status: 'cancelled' })
+          .eq('order_id', order_id)
+          .eq('status', 'pending');
+      } catch (supaErr) {
+        console.warn('Supabase payment cancel warning:', supaErr.message);
+      }
+    }
+
+    try {
+      await pool.query("UPDATE payments SET status = 'cancelled' WHERE order_id = ? AND status = 'pending'", [order_id]);
+    } catch (mysqlErr) {}
+
+    broadcastRealtimeEvent('payment_cancelled', { order_id, reason: reason || 'User cancelled' });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Payment order status updated to cancelled'
+    });
+  } catch (err) {
+    console.error('Error in cancelOrder:', err);
+    return res.status(500).json({ success: false, error: 'Server error cancelling payment order' });
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
   getPaymentHistory,
   handleWebhook,
+  cancelOrder,
 };
