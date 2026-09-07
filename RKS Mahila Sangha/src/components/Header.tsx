@@ -88,11 +88,11 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-3">
           {/* Logo and Title */}
-          <Link to="/" className="flex items-center gap-2 sm:gap-3">
-            <img src={logo} alt="RKS Logo" className="w-14 h-14 sm:w-20 sm:h-20 object-contain flex-shrink-0" />
-            <div className="notranslate leading-tight">
-              <h3 className="text-xs sm:text-base md:text-2xl font-extrabold text-[#0A6C87] tracking-tight">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ</h3>
-              <h3 className="text-xs sm:text-base md:text-2xl font-extrabold text-[#0A6C87] tracking-tight">Raju Kshatriya Mahila Sangha</h3>
+          <Link to="/" className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[calc(100%-48px)] lg:max-w-none">
+            <img src={logo} alt="RKS Logo" className="w-12 h-12 sm:w-20 sm:h-20 object-contain flex-shrink-0" />
+            <div className="notranslate leading-tight min-w-0 flex-1 overflow-hidden">
+              <h3 className="text-[10px] xs:text-xs sm:text-base md:text-2xl font-extrabold text-[#0A6C87] tracking-tight truncate">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ</h3>
+              <h3 className="text-[10px] xs:text-xs sm:text-base md:text-2xl font-extrabold text-[#0A6C87] tracking-tight truncate">Raju Kshatriya Mahila Sangha</h3>
             </div>
           </Link>
 

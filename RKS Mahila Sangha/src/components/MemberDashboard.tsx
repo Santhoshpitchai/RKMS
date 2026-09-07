@@ -1276,27 +1276,27 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans pb-16">
       
       {/* Top Header Banner */}
-      <div className="bg-gradient-to-r from-[#0A6C87] to-cyan-700 text-white py-8 border-b border-cyan-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-2xl font-bold border border-white/30 shadow-inner">
+      <div className="bg-gradient-to-r from-[#0A6C87] to-cyan-700 text-white py-6 sm:py-8 border-b border-cyan-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 max-w-full">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-xl sm:text-2xl font-bold border border-white/30 shadow-inner flex-shrink-0">
               {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Member Portal</h1>
-                <span className="bg-[#E5C100] text-[#0A6C87] text-[11px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight">Member Portal</h1>
+                <span className="bg-[#E5C100] text-[#0A6C87] text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex-shrink-0">
                   {membership ? 'ACTIVE MEMBER' : 'REGISTERED USER'}
                 </span>
               </div>
-              <p className="text-cyan-100 text-xs md:text-sm mt-1 truncate max-w-xs md:max-w-none">{user.name} • {user.email}</p>
+              <p className="text-cyan-100 text-xs sm:text-sm mt-0.5 truncate max-w-[200px] xs:max-w-xs sm:max-w-none">{user.name} • {user.email}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
             <button
               onClick={onLogout}
-              className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 border border-white/20"
+              className="bg-white/10 hover:bg-white/20 text-white px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 border border-white/20"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -1307,7 +1307,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
 
       {/* Main Tab Navigation Bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto gap-2 py-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto scrollbar-hide gap-2 py-2 w-full max-w-full">
           {[
             { id: 'overview', label: t('dashboard.overview'), icon: LayoutDashboard },
             { id: 'membership', label: t('dashboard.memberCard'), icon: IdCard },
@@ -1318,7 +1318,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id as any)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
                 activeTab === tab.id
                   ? 'bg-[#0A6C87] text-white shadow-md'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-[#0A6C87]'
@@ -1332,62 +1332,62 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
       </div>
 
       {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
 
         {/* 1. OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-8 animate-fade-in">
             {/* Quick Action Tiles */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <button
                 onClick={() => handleTabChange('membership')}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex items-center gap-4 text-left"
+                className="bg-white p-3.5 sm:p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col sm:flex-row items-center text-center sm:text-left gap-2 sm:gap-4"
               >
-                <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[#0A6C87]">
-                  <IdCard className="w-6 h-6" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[#0A6C87] flex-shrink-0">
+                  <IdCard className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">{membership ? 'Member Card' : 'Buy Membership'}</h3>
-                  <p className="text-xs text-gray-500">{membership ? 'View & Download ID' : '₹1,001 Lifetime'}</p>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug">{membership ? 'Member Card' : 'Buy Membership'}</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">{membership ? 'View & Download ID' : '₹1,001 Lifetime'}</p>
                 </div>
               </button>
 
               <button
                 onClick={() => handleTabChange('donations')}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex items-center gap-4 text-left"
+                className="bg-white p-3.5 sm:p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col sm:flex-row items-center text-center sm:text-left gap-2 sm:gap-4"
               >
-                <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center text-[#E5C100]">
-                  <Heart className="w-6 h-6" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-50 flex items-center justify-center text-[#E5C100] flex-shrink-0">
+                  <Heart className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">Make Donation</h3>
-                  <p className="text-xs text-gray-500">Support Causes</p>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug">Make Donation</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">Support Causes</p>
                 </div>
               </button>
 
               <button
                 onClick={() => handleTabChange('events')}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex items-center gap-4 text-left"
+                className="bg-white p-3.5 sm:p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col sm:flex-row items-center text-center sm:text-left gap-2 sm:gap-4"
               >
-                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                  <Calendar className="w-6 h-6" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">RKS Events</h3>
-                  <p className="text-xs text-gray-500">Browse & Register</p>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug">RKS Events</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">Browse & Register</p>
                 </div>
               </button>
 
               <button
                 onClick={() => handleTabChange('settings')}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex items-center gap-4 text-left"
+                className="bg-white p-3.5 sm:p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col sm:flex-row items-center text-center sm:text-left gap-2 sm:gap-4"
               >
-                <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
-                  <UserCheck className="w-6 h-6" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 flex-shrink-0">
+                  <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">Account Status</h3>
-                  <p className="text-xs text-gray-500">Email Verified</p>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug">Account Status</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">Email Verified</p>
                 </div>
               </button>
             </div>
