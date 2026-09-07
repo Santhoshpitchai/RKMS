@@ -333,12 +333,20 @@ export function PaymentResultModal({ success, failure, onClose, onRetry, onDownl
                     <Download className="w-4 h-4" /> Download Official Member ID Card
                   </button>
                 )}
-                {success.type === 'donation' && success.receiptDownloadUrl && (
+                {success.type === 'donation' && (
                   <a
-                    href={success.receiptDownloadUrl}
+                    href={
+                      (() => {
+                        const token = localStorage.getItem('userToken') || localStorage.getItem('adminToken') || '';
+                        const base = success.receiptDownloadUrl && !success.receiptDownloadUrl.includes('/uploads/')
+                          ? (success.receiptDownloadUrl.startsWith('http') ? success.receiptDownloadUrl : `http://localhost:5001/api${success.receiptDownloadUrl.startsWith('/') ? '' : '/'}${success.receiptDownloadUrl}`)
+                          : `http://localhost:5001/api/donation/receipt/${success.paymentId || success.orderId}`;
+                        return base.includes('token=') ? base : `${base}${base.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+                      })()
+                    }
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full bg-[#0A6C87] hover:bg-cyan-800 text-white py-3 rounded-xl font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-100"
+                    className="w-full bg-[#0A6C87] hover:bg-cyan-800 text-white py-3 rounded-xl font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-100 cursor-pointer"
                   >
                     <Download className="w-4 h-4" /> Download Official Receipt (PDF)
                   </a>

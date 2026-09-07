@@ -1997,7 +1997,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                               <div className="flex items-center gap-2 justify-end pt-1 sm:pt-0">
                                 {isCompleted && (
                                   <a
-                                    href={`${API_BASE_URL}/donation/receipt/${p.paymentId || p.orderId || p.id}`}
+                                    href={`${API_BASE_URL}/donation/receipt/${p.paymentId || p.orderId || p.id}?token=${encodeURIComponent(localStorage.getItem('userToken') || localStorage.getItem('adminToken') || '')}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="bg-[#0A6C87] text-white hover:bg-cyan-800 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
