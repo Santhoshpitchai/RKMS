@@ -25,8 +25,10 @@ const donationValidation = [
     body('address').optional({ checkFalsy: true }).trim(),
 ];
 
+const { userOrAdminAuth } = require('../middlewares/userAuth');
+
 // Download 80G Tax Exemption Receipt PDF
-router.get('/receipt/:paymentId', downloadReceiptPdf);
+router.get('/receipt/:paymentId', userOrAdminAuth, downloadReceiptPdf);
 
 // Create donation order
 router.post('/create-order', donationValidation, createDonationOrder);

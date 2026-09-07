@@ -106,7 +106,7 @@ export function Services() {
                   }}
                 />
               </div>
-              <div className="md:w-1/2 p-8 flex flex-col justify-center">
+              <div className="md:w-1/2 p-4 sm:p-8 flex flex-col justify-center">
                 <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mb-4">
                   <service.icon className="w-8 h-8 text-cyan-600" />
                 </div>
@@ -134,7 +134,7 @@ export function Services() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {[
               { number: '2000+', label: 'Lives Impacted', color: 'text-cyan-600' },
               { number: '70+', label: 'Events Organised', color: 'text-amber-600' },
@@ -154,7 +154,7 @@ export function Services() {
 
       {/* How to Get Involved */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="bg-gradient-to-r from-[#0A6C87] to-cyan-600 rounded-2xl p-12 text-white text-center">
+        <div className="bg-gradient-to-r from-[#0A6C87] to-cyan-600 rounded-2xl p-6 sm:p-12 text-white text-center">
           <h2 className="text-3xl font-bold mb-6">Get Involved</h2>
           <p className="text-xl mb-8 text-cyan-50 max-w-2xl mx-auto">
             Join us in our mission to empower women and build stronger communities. 

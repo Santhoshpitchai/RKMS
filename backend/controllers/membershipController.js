@@ -7,6 +7,7 @@ const { sendMembershipConfirmationEmail } = require('../services/emailService');
 const { sendWhatsAppMembershipAlert } = require('../services/whatsappService');
 const { getSettings } = require('../services/settingsService');
 const { generateMembershipId } = require('../utils/idGenerator');
+const { uploadImage } = require('../services/imageService');
 
 const isSupabaseConfigured = () => Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_KEY);
 const isRazorpayConfigured = () => Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_ID !== 'rzp_test_placeholder');
@@ -164,9 +165,24 @@ const verifyMembershipPayment = async (req, res) => {
 
     const settings = await getSettings();
     const membership_id = await generateMembershipId();
-    let photoUrl = null;
+    let photoUrl = req.body.photo_url || req.body.photoUrl || null;
     if (req.file) {
-      photoUrl = `/uploads/${req.file.filename}`;
+      const uploadRes = await uploadImage(req.file, 'member');
+      if (uploadRes.success) {
+        photoUrl = uploadRes.imageUrl;
+      } else {
+        // Fallback: store as base64 so it works across all devices/browsers
+        try {
+          const fs = require('fs');
+          const fileBuffer = fs.readFileSync(req.file.path);
+          const mime = req.file.mimetype || 'image/jpeg';
+          photoUrl = `data:${mime};base64,${fileBuffer.toString('base64')}`;
+          try { fs.unlinkSync(req.file.path); } catch (_) { }
+        } catch (b64Err) {
+          console.warn('Photo base64 fallback warning:', b64Err.message);
+          photoUrl = null;
+        }
+      }
     }
 
     // If Supabase is configured, save directly to Supabase
@@ -174,33 +190,72 @@ const verifyMembershipPayment = async (req, res) => {
       const validMaritalStatus = ['Single', 'Married', 'Widowed', 'Divorced'].includes(maritalStatus) ? maritalStatus : 'Single';
       const validBloodGroup = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(bloodGroup) ? bloodGroup : 'O+';
 
-      const { data: memberData, error: memErr } = await supabase
-        .from('members')
-        .insert([{
-          name: name || 'New Member',
-          guardian_name: guardianName || null,
-          gotra_name: gotraName || null,
-          email: email || '',
-          phone: phone || '',
-          membership_id,
-          date_of_birth: dateOfBirth || null,
-          educational_qualification: educationalQualification || null,
-          profession: profession || null,
-          marital_status: validMaritalStatus,
-          blood_group: validBloodGroup,
-          address: address || '',
-          city: city || '',
-          state: state || 'Karnataka',
-          pincode: pincode || '',
-          aadhar_number: aadharNumber || null,
-          photo_url: photoUrl,
-          is_active: true
-        }])
-        .select()
-        .maybeSingle();
+      let memberData = null;
+      const cleanEmail = email ? email.trim().toLowerCase() : '';
+      const cleanPhone = phone ? phone.trim() : '';
 
-      if (memErr) {
-        console.error('Supabase member creation error:', memErr.message);
+      if (cleanEmail || cleanPhone) {
+        try {
+          const { data: existingM } = await supabase
+            .from('members')
+            .select('*')
+            .or(`email.eq.${cleanEmail},phone.eq.${cleanPhone}`)
+            .maybeSingle();
+
+          if (existingM) {
+            memberData = existingM;
+            await supabase
+              .from('members')
+              .update({
+                name: name || existingM.name,
+                guardian_name: guardianName || existingM.guardian_name,
+                gotra_name: gotraName || existingM.gotra_name,
+                email: cleanEmail || existingM.email,
+                phone: cleanPhone || existingM.phone,
+                address: address || existingM.address,
+                city: city || existingM.city,
+                state: state || existingM.state,
+                pincode: pincode || existingM.pincode,
+                photo_url: photoUrl || existingM.photo_url,
+                is_active: true
+              })
+              .eq('id', existingM.id);
+          }
+        } catch (mErr) {
+          console.warn('Member lookup warning:', mErr.message);
+        }
+      }
+
+      if (!memberData) {
+        const { data: createdM, error: memErr } = await supabase
+          .from('members')
+          .insert([{
+            name: name || 'New Member',
+            guardian_name: guardianName || null,
+            gotra_name: gotraName || null,
+            email: cleanEmail,
+            phone: cleanPhone,
+            membership_id,
+            date_of_birth: dateOfBirth || null,
+            educational_qualification: educationalQualification || null,
+            profession: profession || null,
+            marital_status: validMaritalStatus,
+            blood_group: validBloodGroup,
+            address: address || '',
+            city: city || '',
+            state: state || 'Karnataka',
+            pincode: pincode || '',
+            aadhar_number: aadharNumber || null,
+            photo_url: photoUrl,
+            is_active: true
+          }])
+          .select()
+          .maybeSingle();
+
+        memberData = createdM;
+        if (memErr) {
+          console.error('Supabase member creation error:', memErr.message);
+        }
       }
 
       // Record completed payment in Supabase
@@ -241,7 +296,19 @@ const verifyMembershipPayment = async (req, res) => {
         success: true,
         message: 'Membership created successfully',
         membership_id,
-        member: { name, email, membership_id }
+        payment_id: razorpay_payment_id || `PAY_${Date.now()}`,
+        order_id: razorpay_order_id || `ORDER_${Date.now()}`,
+        amount: settings.membershipFee || 1001,
+        member: {
+          memberId: membership_id,
+          fullName: name,
+          email,
+          phone,
+          city: city || 'Bengaluru',
+          state: state || 'Karnataka',
+          photoUrl: photoUrl || null,
+          registrationDate: new Date().toISOString().split('T')[0]
+        }
       });
     }
 
@@ -273,17 +340,19 @@ const verifyMembershipPayment = async (req, res) => {
     );
 
     const memberId = memberResult.insertId;
+    const finalPaymentId = razorpay_payment_id || `PAY_${Date.now()}`;
+    const finalOrderId = razorpay_order_id || `ORDER_${Date.now()}`;
 
     const [updateResult] = await pool.query(
       `UPDATE payments SET member_id = ?, status = 'completed', payment_id = ? WHERE order_id = ?`,
-      [memberId, razorpay_payment_id || `PAY_${Date.now()}`, razorpay_order_id]
+      [memberId, finalPaymentId, razorpay_order_id]
     );
 
     if (updateResult.affectedRows === 0) {
       await pool.query(
         `INSERT INTO payments (member_id, type, amount, status, payment_id, order_id, donor_name, donor_email, donor_phone)
          VALUES (?, 'membership', ?, 'completed', ?, ?, ?, ?, ?)`,
-        [memberId, settings.membershipFee, razorpay_payment_id || `PAY_${Date.now()}`, razorpay_order_id, name, email, phone]
+        [memberId, settings.membershipFee || 1001, finalPaymentId, finalOrderId, name, email, phone]
       );
     }
 
@@ -298,7 +367,19 @@ const verifyMembershipPayment = async (req, res) => {
       success: true,
       message: 'Membership created successfully',
       membership_id,
-      member: { name, email, membership_id }
+      payment_id: finalPaymentId,
+      order_id: finalOrderId,
+      amount: settings.membershipFee || 1001,
+      member: {
+        memberId: membership_id,
+        fullName: name,
+        email,
+        phone,
+        city: city || 'Bengaluru',
+        state: state || 'Karnataka',
+        photoUrl: photoUrl || null,
+        registrationDate: new Date().toISOString().split('T')[0]
+      }
     });
   } catch (error) {
     console.error('Error verifying membership payment:', error);
@@ -306,21 +387,54 @@ const verifyMembershipPayment = async (req, res) => {
   }
 };
 
+const jwt = require('jsonwebtoken');
+const secret = process.env.JWT_SECRET || 'supersecretkey_rks_mahila_sangha_2026';
+
 // Check if user email already has a membership profile in DB
 const getMembershipStatus = async (req, res) => {
   try {
-    const { email } = req.query;
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Email query parameter is required' });
+    let userPayload = req.user;
+
+    if (!userPayload) {
+      let token;
+      if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+
+      if (token) {
+        try {
+          userPayload = jwt.verify(token, secret);
+        } catch (err) {
+          // Token expired or invalid — fallback gracefully to query email
+        }
+      }
     }
 
+    let email = req.query.email;
+
+    if (email && userPayload && userPayload.email) {
+      const requestedEmail = String(email).trim().toLowerCase();
+      const authEmail = String(userPayload.email).trim().toLowerCase();
+      if (requestedEmail !== authEmail && userPayload.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Forbidden. You are not authorized to view another user\'s membership status.' });
+      }
+    }
+
+    if (!email && userPayload) {
+      email = userPayload.email;
+    }
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email query parameter or user login is required' });
+    }
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
     let member = null;
 
     if (isSupabaseConfigured()) {
       const { data } = await supabase
         .from('members')
         .select('*')
-        .eq('email', email)
+        .ilike('email', cleanEmail)
         .maybeSingle();
 
       member = data;
@@ -328,33 +442,37 @@ const getMembershipStatus = async (req, res) => {
 
     if (!member) {
       try {
-        const [rows] = await pool.query('SELECT * FROM members WHERE email = ? LIMIT 1', [email]);
+        const [rows] = await pool.query('SELECT * FROM members WHERE LOWER(email) = ? LIMIT 1', [cleanEmail]);
         if (rows && rows.length) member = rows[0];
       } catch (err) {
         // ignore
       }
     }
 
-    if (member) {
-      let payments = [];
+    let payments = [];
+    if (cleanEmail) {
       if (isSupabaseConfigured()) {
         try {
+          const filterStr = member
+            ? `donor_email.ilike.${cleanEmail},member_id.eq.${member.id}`
+            : `donor_email.ilike.${cleanEmail}`;
+
           const { data: supaPayments } = await supabase
             .from('payments')
             .select('*')
-            .or(`donor_email.eq.${email},member_id.eq.${member.id}`)
-            .eq('status', 'completed')
+            .or(filterStr)
             .order('created_at', { ascending: false });
 
           if (supaPayments) {
             payments = supaPayments.map(p => ({
               id: p.id,
-              type: p.type,
+              type: p.type || 'donation',
               amount: Number(p.amount),
-              status: p.status,
-              paymentId: p.payment_id,
+              status: p.status || 'completed',
+              paymentId: p.payment_id || p.order_id,
               orderId: p.order_id,
-              date: p.created_at ? String(p.created_at).split('T')[0] : new Date().toISOString().split('T')[0]
+              purpose: p.purpose || (p.type === 'membership' ? 'Lifetime Membership Buying' : 'General Donation'),
+              date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toISOString().split('T')[0]
             }));
           }
         } catch (supaErr) {
@@ -362,22 +480,48 @@ const getMembershipStatus = async (req, res) => {
         }
       }
 
+      if (!payments.length) {
+        try {
+          const [myPayments] = await pool.query(
+            'SELECT * FROM payments WHERE LOWER(donor_email) = ? OR member_id = ? ORDER BY created_at DESC',
+            [cleanEmail, member ? member.id : -1]
+          );
+          if (myPayments && myPayments.length) {
+            payments = myPayments.map(p => ({
+              id: p.id,
+              type: p.type || 'donation',
+              amount: Number(p.amount),
+              status: p.status || 'completed',
+              paymentId: p.payment_id || p.order_id,
+              orderId: p.order_id,
+              purpose: p.purpose || (p.type === 'membership' ? 'Lifetime Membership Buying' : 'General Donation'),
+              date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toISOString().split('T')[0]
+            }));
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (member) {
       return res.status(200).json({
         success: true,
         exists: true,
         member: {
           memberId: member.membership_id,
-          fullName: member.name,
-          guardianName: member.guardian_name,
-          gotraName: member.gotra_name,
+          fullName: member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim(),
+          firstName: member.first_name || (member.name ? member.name.split(' ')[0] : ''),
+          lastName: member.last_name || (member.name ? member.name.split(' ').slice(1).join(' ') : ''),
+          guardianName: member.guardian_name || '',
+          gotraName: member.gotra_name || '',
           email: member.email,
           phone: member.phone,
           dateOfBirth: member.date_of_birth,
-          profession: member.profession,
-          address: member.address,
-          city: member.city,
-          state: member.state,
-          pincode: member.pincode,
+          profession: member.profession || '',
+          address: member.address || '',
+          city: member.city || '',
+          state: member.state || 'Karnataka',
+          pincode: member.pincode || '',
+          photoUrl: member.photo_url || member.photoUrl || null,
           registrationDate: member.created_at ? String(member.created_at).split('T')[0] : new Date().toISOString().split('T')[0]
         },
         payments
@@ -386,7 +530,8 @@ const getMembershipStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      exists: false
+      exists: false,
+      payments
     });
   } catch (error) {
     console.error('Error getting membership status:', error);
@@ -399,40 +544,91 @@ const getMembershipStatus = async (req, res) => {
  */
 const updateMembershipDetails = async (req, res) => {
   try {
-    const { email, name, phone, guardianName, gotraName, dateOfBirth, profession, address, city, state, pincode } = req.body;
+    let userPayload = req.user;
+    if (!userPayload) {
+      let token;
+      if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+      if (token) {
+        try { userPayload = jwt.verify(token, secret); } catch (e) {}
+      }
+    }
+
+    const { email, name, fullName, firstName, lastName, phone, guardianName, gotraName, dateOfBirth, profession, address, city, state, pincode } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'Member email is required' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    if (userPayload && userPayload.role !== 'admin' && userPayload.email && userPayload.email.trim().toLowerCase() !== cleanEmail) {
+      return res.status(403).json({ success: false, message: 'Forbidden. You are not authorized to update another user\'s profile.' });
+    }
+
+    let photoUrl = req.body.photo_url || req.body.photoUrl || null;
+
+    if (req.file) {
+      const uploadRes = await uploadImage(req.file, 'member');
+      if (uploadRes.success && uploadRes.imageUrl) {
+        photoUrl = uploadRes.imageUrl;
+      } else {
+        console.warn('Member photo upload notice:', uploadRes.error);
+        return res.status(400).json({
+          success: false,
+          message: uploadRes.error || 'Failed to process uploaded photo. Please ensure it is a valid image (JPEG, PNG, WebP, max 5MB).'
+        });
+      }
+    }
+
+    // Determine names
+    let finalFirstName = (firstName || '').trim();
+    let finalLastName = (lastName || '').trim();
+    let finalFullName = (fullName || name || '').trim();
+
+    if (!finalFullName && (finalFirstName || finalLastName)) {
+      finalFullName = `${finalFirstName} ${finalLastName}`.trim();
+    } else if (finalFullName && !finalFirstName && !finalLastName) {
+      const parts = finalFullName.split(' ');
+      finalFirstName = parts[0] || '';
+      finalLastName = parts.slice(1).join(' ');
+    }
 
     if (isSupabaseConfigured()) {
       const updateData = {};
-      if (name) updateData.name = name;
-      if (phone) updateData.phone = phone;
-      if (guardianName) updateData.guardian_name = guardianName;
-      if (gotraName) updateData.gotra_name = gotraName;
-      if (dateOfBirth) updateData.date_of_birth = dateOfBirth;
-      if (profession) updateData.profession = profession;
-      if (address) updateData.address = address;
-      if (city) updateData.city = city;
-      if (state) updateData.state = state;
-      if (pincode) updateData.pincode = pincode;
+      // Note: Only include columns that actually exist in the Supabase members table schema.
+      // The members table does NOT have first_name/last_name columns — only 'name'.
+      if (finalFullName) updateData.name = finalFullName;
+      if (phone !== undefined) updateData.phone = phone;
+      if (guardianName !== undefined) updateData.guardian_name = guardianName;
+      if (gotraName !== undefined) updateData.gotra_name = gotraName;
+      if (dateOfBirth !== undefined) updateData.date_of_birth = dateOfBirth;
+      if (profession !== undefined) updateData.profession = profession;
+      if (address !== undefined) updateData.address = address;
+      if (city !== undefined) updateData.city = city;
+      if (state !== undefined) updateData.state = state;
+      if (pincode !== undefined) updateData.pincode = pincode;
+      if (photoUrl) updateData.photo_url = photoUrl;
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('members')
         .update(updateData)
-        .eq('email', cleanEmail);
+        .ilike('email', cleanEmail);
+
+      if (updateError) {
+        console.error('Supabase member update error:', updateError.message);
+      } else {
+        console.log(`✅ Member profile updated in Supabase for ${cleanEmail}${photoUrl ? ' (with photo)' : ''}`);
+      }
 
       const userUpdate = {};
-      if (name) userUpdate.name = name;
+      if (finalFullName) userUpdate.name = finalFullName;
       if (phone) userUpdate.phone = phone;
       if (Object.keys(userUpdate).length > 0) {
         await supabase
           .from('users')
           .update(userUpdate)
-          .eq('email', cleanEmail);
+          .ilike('email', cleanEmail);
       }
     }
 
@@ -440,6 +636,8 @@ const updateMembershipDetails = async (req, res) => {
       await pool.query(
         `UPDATE members SET 
           name = COALESCE(?, name),
+          first_name = COALESCE(?, first_name),
+          last_name = COALESCE(?, last_name),
           phone = COALESCE(?, phone),
           guardian_name = COALESCE(?, guardian_name),
           gotra_name = COALESCE(?, gotra_name),
@@ -447,9 +645,10 @@ const updateMembershipDetails = async (req, res) => {
           address = COALESCE(?, address),
           city = COALESCE(?, city),
           state = COALESCE(?, state),
-          pincode = COALESCE(?, pincode)
-        WHERE email = ?`,
-        [name || null, phone || null, guardianName || null, gotraName || null, profession || null, address || null, city || null, state || null, pincode || null, cleanEmail]
+          pincode = COALESCE(?, pincode),
+          photo_url = COALESCE(?, photo_url)
+        WHERE LOWER(email) = ?`,
+        [finalFullName || null, finalFirstName || null, finalLastName || null, phone || null, guardianName || null, gotraName || null, profession || null, address || null, city || null, state || null, pincode || null, photoUrl || null, cleanEmail]
       );
     } catch (mysqlErr) {
       console.warn('MySQL update membership warning:', mysqlErr.message);
@@ -457,7 +656,22 @@ const updateMembershipDetails = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Membership details updated successfully in database'
+      message: 'Membership details updated successfully',
+      photoUrl: photoUrl || undefined,
+      member: {
+        fullName: finalFullName,
+        firstName: finalFirstName,
+        lastName: finalLastName,
+        phone,
+        guardianName,
+        gotraName,
+        profession,
+        address,
+        city,
+        state,
+        pincode,
+        photoUrl: photoUrl || undefined
+      }
     });
   } catch (error) {
     console.error('Update membership error:', error);
@@ -470,6 +684,18 @@ const updateMembershipDetails = async (req, res) => {
  */
 const cancelMembership = async (req, res) => {
   try {
+    let userPayload = req.user;
+    if (!userPayload) {
+      let token;
+      if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+      if (!token) return res.status(401).json({ success: false, message: 'Authentication required' });
+      try { userPayload = jwt.verify(token, secret); } catch (e) {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+      }
+    }
+
     const { email } = req.body;
 
     if (!email) {
@@ -477,6 +703,9 @@ const cancelMembership = async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    if (userPayload.role !== 'admin' && userPayload.email && userPayload.email.trim().toLowerCase() !== cleanEmail) {
+      return res.status(403).json({ success: false, message: 'Forbidden. You cannot cancel another user\'s membership.' });
+    }
 
     if (isSupabaseConfigured()) {
       await supabase

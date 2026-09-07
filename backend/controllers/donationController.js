@@ -210,9 +210,30 @@ const verifyDonationPayment = async (req, res) => {
     }
 };
 
+const jwt = require('jsonwebtoken');
+const secret = process.env.JWT_SECRET || 'supersecretkey_rks_mahila_sangha_2026';
+
 // Download 80G PDF Receipt
 const downloadReceiptPdf = async (req, res) => {
     try {
+        let userPayload = req.user;
+        if (!userPayload) {
+            let token;
+            if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+                token = req.headers.authorization.split(' ')[1];
+            }
+
+            if (!token) {
+                return res.status(401).json({ success: false, message: 'Authentication required to download receipt' });
+            }
+
+            try {
+                userPayload = jwt.verify(token, secret);
+            } catch (err) {
+                return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+            }
+        }
+
         const { paymentId } = req.params;
 
         let payment = null;
@@ -241,11 +262,21 @@ const downloadReceiptPdf = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Payment receipt record not found' });
         }
 
+        // IDOR Check: Ensure authenticated user owns this payment or is an Admin
+        const donorEmail = (payment.donor_email || payment.email || '').trim().toLowerCase();
+        const authEmail = (userPayload.email || '').trim().toLowerCase();
+
+        if (userPayload.role !== 'admin' && (!donorEmail || authEmail !== donorEmail)) {
+            return res.status(403).json({ success: false, message: 'Forbidden. You can only download receipts for your own payments.' });
+        }
+
         const pdfBuffer = await generateDonationReceiptPdf({
             receiptNumber: `80G-${payment.id || Date.now()}`,
             donorName: payment.donor_name || 'Valued Supporter',
             donorEmail: payment.donor_email || '',
             donorPhone: payment.donor_phone || '',
+            panNumber: payment.pan_number || payment.panNumber || 'N/A',
+            address: payment.address || 'N/A',
             amount: Number(payment.amount || 0),
             purpose: payment.purpose || payment.type || 'Donation',
             paymentId: payment.payment_id || `PAY_${Date.now()}`,

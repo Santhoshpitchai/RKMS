@@ -1,6 +1,6 @@
 import { AdminLayout } from './AdminLayout';
 import { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, X, Upload, Calendar, MapPin, Search, LayoutGrid, List, Sparkles, Ticket, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Upload, Calendar, MapPin, Search, LayoutGrid, List, Sparkles, Ticket, Download, Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi, resolveBackendAssetUrl } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -12,6 +12,7 @@ interface EventItem {
   location: string;
   description: string;
   image_url?: string;
+  images?: string[];
   price: number;
   is_free: boolean;
   category: string;
@@ -73,30 +74,36 @@ export function EventManagement() {
     isFree: true,
     category: 'upcoming' as 'upcoming' | 'past',
   });
+  
+  // Gallery state for multiple images
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [savedImageUrl, setSavedImageUrl] = useState<string>('');
+  const [filePreviews, setFilePreviews] = useState<string[]>([]);
+  const [urlInputText, setUrlInputText] = useState('');
 
   const handleOpenModal = (event?: EventItem) => {
     if (event) {
       setEditingEvent(event);
-      const existing = event.image_url || '';
-      setSavedImageUrl(existing);
+      const existing = (event.images && event.images.length > 0)
+        ? event.images
+        : (event.image_url ? [event.image_url] : []);
+      setExistingImageUrls(existing);
       setFormData({
         title: event.title,
         date: (event.date || '').slice(0, 10),
         location: event.location,
         description: event.description,
-        imageUrlText: existing.startsWith('http') ? existing : '',
+        imageUrlText: '',
         price: event.price,
         isFree: !!event.is_free,
         category: (event.category as 'upcoming' | 'past') || 'upcoming',
       });
-      setImagePreviews(existing ? [resolveBackendAssetUrl(existing)] : []);
       setImageFiles([]);
+      setFilePreviews([]);
+      setUrlInputText('');
     } else {
       setEditingEvent(null);
-      setSavedImageUrl('');
+      setExistingImageUrls([]);
       setFormData({
         title: '',
         date: '',
@@ -107,28 +114,54 @@ export function EventManagement() {
         isFree: true,
         category: 'upcoming',
       });
-      setImagePreviews([]);
       setImageFiles([]);
+      setFilePreviews([]);
+      setUrlInputText('');
     }
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
-    imagePreviews.forEach(p => { if (p.startsWith('blob:')) URL.revokeObjectURL(p); });
+    filePreviews.forEach(p => { if (p.startsWith('blob:')) URL.revokeObjectURL(p); });
     setShowModal(false);
     setEditingEvent(null);
+    setExistingImageUrls([]);
     setImageFiles([]);
-    setImagePreviews([]);
-    setSavedImageUrl('');
+    setFilePreviews([]);
+    setUrlInputText('');
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).slice(0, 4);
-    if (files.length > 0) {
-      imagePreviews.forEach(p => { if (p.startsWith('blob:')) URL.revokeObjectURL(p); });
-      setImageFiles(files);
-      setImagePreviews(files.map(f => URL.createObjectURL(f)));
-      setFormData((prev) => ({ ...prev, imageUrlText: '' }));
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length > 0) {
+      const newPreviews = selectedFiles.map(f => URL.createObjectURL(f));
+      setImageFiles(prev => [...prev, ...selectedFiles]);
+      setFilePreviews(prev => [...prev, ...newPreviews]);
+    }
+    e.target.value = '';
+  };
+
+  const handleAddUrlImage = () => {
+    const trimmed = urlInputText.trim();
+    if (trimmed && /^https?:\/\//i.test(trimmed)) {
+      setExistingImageUrls(prev => [...prev, trimmed]);
+      setUrlInputText('');
+      toast.success('Image URL added to gallery');
+    } else {
+      toast.error('Please enter a valid HTTP/HTTPS image URL');
+    }
+  };
+
+  const handleRemoveImageItem = (index: number) => {
+    if (index < existingImageUrls.length) {
+      setExistingImageUrls(prev => prev.filter((_, i) => i !== index));
+    } else {
+      const fileIdx = index - existingImageUrls.length;
+      if (filePreviews[fileIdx] && filePreviews[fileIdx].startsWith('blob:')) {
+        URL.revokeObjectURL(filePreviews[fileIdx]);
+      }
+      setImageFiles(prev => prev.filter((_, i) => i !== fileIdx));
+      setFilePreviews(prev => prev.filter((_, i) => i !== fileIdx));
     }
   };
 
@@ -142,16 +175,17 @@ export function EventManagement() {
     fd.append('price', String(formData.isFree ? 0 : formData.price));
     fd.append('is_free', formData.isFree ? 'true' : 'false');
 
-    if (imageFiles.length > 0) {
-      imageFiles.forEach(file => fd.append('eventImages', file));
-    } else {
-      const urlText = formData.imageUrlText.trim();
-      if (urlText.startsWith('http')) {
-        fd.append('image_url', urlText);
-      } else if (savedImageUrl) {
-        fd.append('image_url', savedImageUrl);
-      }
+    // Send remaining existing image URLs as JSON array
+    fd.append('image_urls', JSON.stringify(existingImageUrls));
+    if (existingImageUrls.length > 0) {
+      fd.append('image_url', existingImageUrls[0]);
     }
+
+    // Send newly uploaded image files
+    imageFiles.forEach(file => {
+      fd.append('eventImages', file);
+    });
+
     return fd;
   };
 
@@ -163,8 +197,9 @@ export function EventManagement() {
       return;
     }
 
-    if (!editingEvent && imageFiles.length === 0 && !formData.imageUrlText.trim().startsWith('http')) {
-      toast.error('Add an event image (upload a file or paste an image URL)');
+    const totalImagesCount = existingImageUrls.length + imageFiles.length;
+    if (totalImagesCount === 0) {
+      toast.error('Please add at least 1 image for the event (upload files or paste an image URL)');
       return;
     }
 
@@ -204,6 +239,34 @@ export function EventManagement() {
     }
   };
 
+  const handleCancelRegistration = async (regId: number) => {
+    if (window.confirm('Are you sure you want to mark this registration as CANCELLED BY ADMIN?')) {
+      const token = localStorage.getItem('adminToken');
+      if (!token) return;
+      const res = await adminApi.deleteEventRegistration(token, regId, false);
+      if (res.success) {
+        toast.success('Registration marked as cancelled by admin');
+        setRegistrations(registrations.map(r => r.id === regId ? { ...r, payment_status: 'cancelled_by_admin' } : r));
+      } else {
+        toast.error(res.message || 'Failed to cancel registration');
+      }
+    }
+  };
+
+  const handleDeleteRegistrationPermanent = async (regId: number) => {
+    if (window.confirm('Are you sure you want to PERMANENTLY DELETE this registration record from database?')) {
+      const token = localStorage.getItem('adminToken');
+      if (!token) return;
+      const res = await adminApi.deleteEventRegistration(token, regId, true);
+      if (res.success) {
+        toast.success('Registration permanently deleted');
+        setRegistrations(registrations.filter(r => r.id !== regId));
+      } else {
+        toast.error(res.message || 'Failed to delete registration');
+      }
+    }
+  };
+
   const filteredEvents = events.filter((e) => {
     const matchesCategory = filterCategory === 'all' || e.category === filterCategory;
     const matchesQuery = e.title.toLowerCase().includes(searchQuery.toLowerCase()) || (e.location && e.location.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -215,30 +278,33 @@ export function EventManagement() {
       toast.error('No event registration records to export.');
       return;
     }
-    const headers = ['Event Title', 'Attendee Name', 'Email', 'Phone', 'Accompanying Count', 'Payment Status', 'Registration Date'];
+    const headers = ['Event Title', 'Attendee Name', 'Email', 'Phone', 'Registration ID', 'Accompanying Count', 'Amount Paid', 'Registration Status', 'Registration Date'];
     const lines = [
       headers.join(','),
       ...registrations.map((r) =>
         [
-          r.event_title || r.eventTitle || 'Sangha Event',
-          r.user_name || r.name || 'Member',
-          r.user_email || r.email || '',
+          r.event_title || r.events?.title || 'Sangha Event',
+          r.name || 'Member',
+          r.email || '',
           r.phone || '',
-          r.accompanying_count || 1,
-          r.payment_status || 'COMPLETED',
+          r.registration_id || r.registrationId || '',
+          r.number_of_attendees || r.accompanying_count || 1,
+          r.payment_amount || 0,
+          r.payment_status === 'cancelled_by_member' ? 'Cancelled by Member' : r.payment_status === 'cancelled_by_admin' ? 'Cancelled by Admin' : (r.payment_status || 'COMPLETED').toUpperCase(),
           (r.created_at || '').slice(0, 10),
         ]
-          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
           .join(',')
       ),
     ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `event_attendees_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    toast.success('Event attendees CSV exported!');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Event_Registrations_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Registrations exported to CSV');
   };
 
   return (
@@ -351,7 +417,7 @@ export function EventManagement() {
                       </span>
                     </div>
 
-                    <div className="absolute top-3 left-3">
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5">
                       {event.is_free ? (
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 uppercase">
                           FREE
@@ -359,6 +425,11 @@ export function EventManagement() {
                       ) : (
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">
                           ₹{event.price} Entry
+                        </span>
+                      )}
+                      {((event.images && event.images.length > 1) || false) && (
+                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shadow">
+                          📷 {event.images?.length} Photos
                         </span>
                       )}
                     </div>
@@ -490,28 +561,73 @@ export function EventManagement() {
                 <thead className="bg-slate-900/80 uppercase text-[10px] font-bold text-slate-400 tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Event</th>
-                    <th className="py-3 px-4">Attendee Name</th>
-                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Registration ID</th>
+                    <th className="py-3 px-4">Attendee Details</th>
                     <th className="py-3 px-4">Membership ID</th>
+                    <th className="py-3 px-4">Attendees</th>
                     <th className="py-3 px-4">Payment</th>
-                    <th className="py-3 px-4">Amount</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {registrations.map((r, idx) => (
                     <tr key={r.id || idx} className="hover:bg-slate-900/50 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-white">{r.event_title || `Event #${r.event_id}`}</td>
-                      <td className="py-3 px-4 font-medium text-slate-200">{r.name}</td>
-                      <td className="py-3 px-4 text-slate-400">{r.email}</td>
-                      <td className="py-3 px-4 font-mono text-cyan-400">{r.membership_id || '-'}</td>
+                      <td className="py-3 px-4 font-semibold text-white">
+                        {r.event_title || r.events?.title || `Event #${r.event_id}`}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-xs font-bold text-cyan-400">
+                        {r.registration_id || r.registrationId || `REG-${r.id}`}
+                      </td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          r.payment_status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                        <p className="font-medium text-slate-200">{r.name}</p>
+                        <p className="text-[11px] text-slate-400">{r.email} {r.phone ? `• ${r.phone}` : ''}</p>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-300">{r.membership_id || '-'}</td>
+                      <td className="py-3 px-4 font-bold text-slate-200">
+                        {r.number_of_attendees || r.accompanying_count || 1} Person(s)
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase inline-block border ${
+                          r.payment_status === 'cancelled_by_member'
+                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                            : r.payment_status === 'cancelled_by_admin' || r.payment_status === 'cancelled'
+                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                            : r.payment_status === 'completed'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                         }`}>
-                          {r.payment_status ? r.payment_status.toUpperCase() : 'COMPLETED'}
+                          {r.payment_status === 'cancelled_by_member'
+                            ? 'CANCELLED BY MEMBER'
+                            : r.payment_status === 'cancelled_by_admin'
+                            ? 'CANCELLED BY ADMIN'
+                            : r.payment_status
+                            ? String(r.payment_status).replace(/_/g, ' ').toUpperCase()
+                            : 'COMPLETED'}
+                        </span>
+                        <span className="block font-bold text-emerald-400 text-[11px] mt-0.5">
+                          ₹{Number(r.payment_amount || 0)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-bold text-emerald-400">₹{Number(r.payment_amount || 0)}</td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {!r.payment_status?.includes('cancelled') && (
+                            <button
+                              onClick={() => handleCancelRegistration(r.id)}
+                              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-extrabold transition-colors flex items-center gap-1"
+                              title="Mark Registration as Cancelled by Admin"
+                            >
+                              <Ban className="w-3.5 h-3.5" /> Cancel
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteRegistrationPermanent(r.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            title="Permanently Delete Registration from Database"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -606,60 +722,98 @@ export function EventManagement() {
                   />
                 </div>
 
-                {/* Styled Dropzone Image Upload */}
-                <div className="space-y-3">
-                  <label className="block font-bold text-slate-200">Event Image Banner</label>
-                  <div className="border-2 border-dashed border-slate-800 hover:border-cyan-500/50 bg-slate-900/50 rounded-2xl p-4 text-center cursor-pointer transition-colors">
-                    <label className="cursor-pointer block space-y-2">
-                      <Upload className="w-7 h-7 text-cyan-400 mx-auto" />
-                      <div className="text-slate-300 font-semibold">Click to upload file from local device</div>
-                      <div className="text-[10px] text-slate-500">PNG, JPG or JPEG up to 5MB</div>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/png,image/jpeg,image/jpg"
-                        onChange={handleImageChange}
-                      />
-                    </label>
-                  </div>
+                {/* Multi-Image Gallery Upload Section */}
+                {(() => {
+                  const allModalPreviews = [...existingImageUrls.map(u => resolveBackendAssetUrl(u)), ...filePreviews];
+                  return (
+                    <div className="space-y-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <label className="block font-bold text-white text-xs">Event Photos Gallery *</label>
+                          <p className="text-[11px] text-slate-400">Add 2-3 or more images for this event. The 1st image will be used as the primary cover banner.</p>
+                        </div>
+                        <span className="bg-cyan-500/20 text-cyan-400 font-extrabold text-[10px] px-2.5 py-1 rounded-full border border-cyan-500/30">
+                          {allModalPreviews.length} Photo{allModalPreviews.length !== 1 ? 's' : ''} Attached
+                        </span>
+                      </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">Or paste a public image URL (https://…)</label>
-                    <input
-                      type="url"
-                      value={formData.imageUrlText}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setFormData({ ...formData, imageUrlText: v });
-                        if (v.trim().startsWith('http')) {
-                          if (imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
-                          setImageFile(null);
-                          setImagePreview(v.trim());
-                        }
-                      }}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs"
-                    />
-                  </div>
+                      {/* File upload & URL inputs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="border-2 border-dashed border-slate-800 hover:border-cyan-500/50 bg-slate-950/80 rounded-xl p-3 text-center cursor-pointer transition-colors">
+                          <label className="cursor-pointer block space-y-1">
+                            <Upload className="w-6 h-6 text-cyan-400 mx-auto" />
+                            <div className="text-slate-200 font-bold text-xs">Upload Device Photos</div>
+                            <div className="text-[10px] text-slate-400">Select multiple files (PNG, JPG, WEBP)</div>
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              onChange={handleImageChange}
+                            />
+                          </label>
+                        </div>
 
-                  {imagePreview && (
-                    <div className="relative rounded-xl overflow-hidden h-40 border border-slate-800">
-                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
-                          setImageFile(null);
-                          setFormData((prev) => ({ ...prev, imageUrlText: '' }));
-                          setImagePreview(savedImageUrl ? resolveBackendAssetUrl(savedImageUrl) : '');
-                        }}
-                        className="absolute top-2 right-2 p-1.5 bg-rose-600 text-white rounded-full hover:bg-rose-700"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                        <div className="border border-slate-800 bg-slate-950/80 rounded-xl p-3 flex flex-col justify-between space-y-2">
+                          <label className="block text-[11px] font-bold text-slate-300">Add Photo by Web URL</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              value={urlInputText}
+                              onChange={(e) => setUrlInputText(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrlImage(); } }}
+                              placeholder="https://images.unsplash.com/..."
+                              className="flex-1 bg-slate-900 border border-slate-800 text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAddUrlImage}
+                              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+                            >
+                              + Add URL
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Live Gallery Thumbnail Grid */}
+                      {allModalPreviews.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-[11px] font-semibold text-slate-400 mb-2">Attached Event Gallery ({allModalPreviews.length} photos):</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {allModalPreviews.map((previewUrl, idx) => (
+                              <div key={idx} className={`relative group rounded-xl overflow-hidden h-28 bg-slate-950 border ${idx === 0 ? 'border-cyan-400 ring-2 ring-cyan-500/30' : 'border-slate-800'}`}>
+                                <img src={previewUrl} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-90" />
+                                
+                                <div className="absolute top-1.5 left-1.5">
+                                  {idx === 0 ? (
+                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-cyan-500 text-slate-950 uppercase shadow">
+                                      ⭐ Cover Banner
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-slate-900/90 text-slate-300 border border-slate-700 shadow">
+                                      Photo #{idx + 1}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveImageItem(idx)}
+                                  className="absolute top-1.5 right-1.5 p-1 bg-rose-600/90 text-white rounded-full hover:bg-rose-700 transition-colors shadow-md"
+                                  title="Remove photo"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>

@@ -133,7 +133,7 @@ export function AboutUs() {
           </div>
 
           {/* Tabs */}
-          <div className="flex justify-center gap-3">
+          <div className="flex flex-wrap sm:flex-nowrap justify-center gap-2 sm:gap-3">
             <button
               onClick={() => setActiveTab('current')}
               className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${

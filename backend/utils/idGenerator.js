@@ -27,8 +27,12 @@ const generateMembershipId = async () => {
         const formattedSequence = sequenceNumber.toString().padStart(4, '0');
         return `${prefix}-${formattedSequence}`;
       } catch (supaErr) {
-        console.warn('Supabase ID generator warning:', supaErr.message);
+        console.warn('Supabase ID generator notice:', supaErr.message);
       }
+
+      // Standalone timestamp-based fallback if Supabase sequence query had temporary warning
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      return `${prefix}-${rand}`;
     }
 
     try {
@@ -43,7 +47,7 @@ const generateMembershipId = async () => {
       );
 
       let sequenceNumber = 1;
-      if (rows.length && rows[0].membership_id) {
+      if (rows && rows.length && rows[0].membership_id) {
         const parts = rows[0].membership_id.split('-');
         if (parts.length > 1 && !isNaN(parseInt(parts[1], 10))) {
           sequenceNumber = parseInt(parts[1], 10) + 1;
@@ -52,7 +56,6 @@ const generateMembershipId = async () => {
       const formattedSequence = sequenceNumber.toString().padStart(4, '0');
       return `${prefix}-${formattedSequence}`;
     } catch (mysqlErr) {
-      // Standalone timestamp-based fallback if DB search unavailable
       const rand = Math.floor(1000 + Math.random() * 9000);
       return `${prefix}-${rand}`;
     }

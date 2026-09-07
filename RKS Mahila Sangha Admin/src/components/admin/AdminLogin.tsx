@@ -12,6 +12,8 @@ export function AdminLogin() {
   const [mode, setMode] = useState<Mode>('login');
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [resetData, setResetData] = useState({ username: '', newPassword: '', confirmPassword: '' });
+  const [resetOtp, setResetOtp] = useState('');
+  const [forgotStep, setForgotStep] = useState<'username' | 'reset'>('username');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,25 +68,59 @@ export function AdminLogin() {
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
+  const handleRequestForgotOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetData.username || !resetData.newPassword) {
-      toast.error('Please fill in all fields');
+    if (!resetData.username || !resetData.username.trim()) {
+      toast.error('Please enter your admin username or email');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await adminApi.forgotPassword(resetData.username.trim());
+      if (response.success) {
+        toast.success(response.message || 'A 6-digit OTP has been sent to your admin email.');
+        setForgotStep('reset');
+      } else {
+        toast.error(response.message || 'Failed to send OTP code');
+      }
+    } catch {
+      toast.error('Failed to request OTP code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPasswordWithOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetOtp || resetOtp.trim().length !== 6) {
+      toast.error('Please enter the 6-digit OTP code');
+      return;
+    }
+    if (!resetData.newPassword || resetData.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
       return;
     }
     if (resetData.newPassword !== resetData.confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
+
     setIsLoading(true);
     try {
-      const response = await adminApi.resetPassword({ username: resetData.username, newPassword: resetData.newPassword });
+      const response = await adminApi.resetPasswordOtp({
+        username: resetData.username.trim(),
+        otp: resetOtp.trim(),
+        newPassword: resetData.newPassword
+      });
+
       if (response.success) {
-        toast.success('Password updated! You can now sign in.');
+        toast.success('Admin password updated successfully! Please sign in.');
         setCredentials({ username: resetData.username, password: resetData.newPassword });
         setMode('login');
+        setForgotStep('username');
+        setResetOtp('');
       } else {
-        toast.error(response.message || 'Failed to reset password');
+        toast.error(response.message || 'Failed to reset admin password');
       }
     } catch {
       toast.error('Password reset failed');
@@ -167,7 +203,7 @@ export function AdminLogin() {
                   <label className="block text-xs font-semibold text-slate-400">Password</label>
                   <button
                     type="button"
-                    onClick={() => { setResetData({ ...resetData, username: credentials.username }); setMode('forgot'); }}
+                    onClick={() => { setResetData({ ...resetData, username: credentials.username }); setForgotStep('username'); setMode('forgot'); }}
                     className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
                   >
                     Forgot password?
@@ -202,10 +238,6 @@ export function AdminLogin() {
                 {isLoading ? 'Signing In...' : 'Sign In to Dashboard'}
               </button>
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-                <span className="text-[11px] text-slate-600">Default credentials:</span>
-                <code className="text-[11px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">admin / admin123</code>
-              </div>
             </form>
           )}
 
@@ -244,43 +276,103 @@ export function AdminLogin() {
 
           {/* ── FORGOT MODE ── */}
           {mode === 'forgot' && (
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setMode('login')} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
-                  <ArrowLeft className="w-4 h-4" />
+            forgotStep === 'username' ? (
+              <form onSubmit={handleRequestForgotOtp} className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setMode('login')} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <h2 className="text-base font-extrabold text-white">Reset Password</h2>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-2">Admin Username or Email</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      value={resetData.username}
+                      onChange={(e) => setResetData({ ...resetData, username: e.target.value })}
+                      className={inputClass}
+                      placeholder="Enter admin username or email"
+                      required
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-cyan-900/40 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-60 disabled:scale-100 mt-2"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  {isLoading ? 'Sending Code...' : 'Send Verification Code'}
                 </button>
-                <h2 className="text-base font-extrabold text-white">Reset Password</h2>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">Admin Username</label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
-                  <input type="text" value={resetData.username} onChange={(e) => setResetData({ ...resetData, username: e.target.value })} className={inputClass} placeholder="Enter admin username" required />
+                <button type="button" onClick={() => setMode('login')} className="w-full text-slate-500 hover:text-slate-300 py-1 text-center text-xs transition-colors">
+                  Back to Sign In
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPasswordWithOtp} className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setForgotStep('username')} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <h2 className="text-base font-extrabold text-white">Enter Verification OTP</h2>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">New Password</label>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
-                  <input type="password" value={resetData.newPassword} onChange={(e) => setResetData({ ...resetData, newPassword: e.target.value })} className={inputClass} placeholder="Enter new password" required />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-2 text-center">6-Digit OTP Code</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={resetOtp}
+                    onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-slate-900/80 border border-slate-700 text-cyan-400 text-center font-mono text-xl tracking-[8px] font-bold rounded-xl py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50"
+                    placeholder="123456"
+                    required
+                  />
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">Confirm Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
-                  <input type="password" value={resetData.confirmPassword} onChange={(e) => setResetData({ ...resetData, confirmPassword: e.target.value })} className={inputClass} placeholder="Confirm new password" required />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-2">New Admin Password</label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
+                    <input
+                      type="password"
+                      value={resetData.newPassword}
+                      onChange={(e) => setResetData({ ...resetData, newPassword: e.target.value })}
+                      className={inputClass}
+                      placeholder="At least 6 characters"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-              <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-cyan-900/40 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-60 disabled:scale-100 mt-2">
-                <KeyRound className="w-4 h-4" />
-                {isLoading ? 'Updating...' : 'Reset Password'}
-              </button>
-              <button type="button" onClick={() => setMode('login')} className="w-full text-slate-500 hover:text-slate-300 py-1 text-center text-xs transition-colors">
-                Back to Sign In
-              </button>
-            </form>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-2">Confirm New Password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
+                    <input
+                      type="password"
+                      value={resetData.confirmPassword}
+                      onChange={(e) => setResetData({ ...resetData, confirmPassword: e.target.value })}
+                      className={inputClass}
+                      placeholder="Re-enter new password"
+                      required
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-cyan-900/40 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-60 disabled:scale-100 mt-2"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  {isLoading ? 'Updating...' : 'Reset Admin Password'}
+                </button>
+                <button type="button" onClick={() => setForgotStep('username')} className="w-full text-slate-500 hover:text-slate-300 py-1 text-center text-xs transition-colors">
+                  Change Username / Email
+                </button>
+              </form>
+            )
           )}
+
 
         </div>
 

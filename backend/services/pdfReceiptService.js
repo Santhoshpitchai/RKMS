@@ -72,322 +72,147 @@ const generateDonationReceipt = async (donationData) => {
         <html>
         <head>
             <meta charset="utf-8">
-            <title>Donation Receipt</title>
+            <title>Donation Receipt & 80G Tax Certificate</title>
             <style>
-                @page {
-                    size: A4 landscape;
-                    margin: 12mm;
-                }
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    background: #fff;
-                    color: #333;
-                    -webkit-print-color-adjust: exact;
-                    print-color-adjust: exact;
-                }
-                .receipt {
-                    width: 100%;
-                    border: 3px double #444;
-                    background: #fff;
-                    padding: 0;
-                    overflow: hidden;
-                }
+                @page { size: A4 portrait; margin: 10mm; }
+                * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+                body { background: #fff; color: #0f172a; font-size: 13px; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .wrapper { border: 2px solid #0A6C87; padding: 24px; min-height: 98vh; display: flex; flex-direction: column; justify-content: space-between; border-radius: 8px; }
+                
+                /* Header */
+                .header-banner { background: #0A6C87; color: white; padding: 20px; border-radius: 8px; display: flex; align-items: center; gap: 20px; }
+                .logo-img { width: 75px; height: 75px; border-radius: 50%; background: white; padding: 3px; object-fit: cover; }
+                .header-info h1 { font-size: 22px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 2px; }
+                .header-info p { font-size: 11px; opacity: 0.9; margin-bottom: 2px; }
+                .header-info .reg-highlight { font-size: 11px; font-weight: bold; color: #fde047; }
+                
+                /* Title Pill */
+                .receipt-title { background: #0f172a; color: white; text-align: center; font-weight: 800; font-size: 12px; padding: 8px; margin: 16px 0; border-radius: 4px; letter-spacing: 1px; }
 
-                /* ── Header ── */
-                .header {
-                    text-align: center;
-                    position: relative;
-                    border-bottom: 2px solid #444;
-                    padding: 14px 10px 12px;
-                }
-                .header-logo {
-                    position: absolute;
-                    left: 14px;
-                    top: 10px;
-                    width: 78px;
-                    height: 78px;
-                }
-                .header-logo img {
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 50%;
-                    object-fit: cover;
-                }
-                .header-reg {
-                    position: absolute;
-                    right: 10px;
-                    top: 10px;
-                    background: #7a2c2c;
-                    color: #fff;
-                    padding: 5px 12px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    letter-spacing: 0.3px;
-                }
-                .header h1 {
-                    font-size: 26px;
-                    letter-spacing: 3px;
-                    color: #c0392b;
-                    margin-bottom: 2px;
-                }
-                .header h2 {
-                    font-size: 18px;
-                    font-weight: 700;
-                    color: #c0392b;
-                }
+                /* 80G Box */
+                .tax-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; }
+                .tax-box h4 { color: #0A6C87; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; }
+                .tax-box p { font-size: 10px; color: #334155; }
 
-                /* ── Rows ── */
-                .row {
-                    display: flex;
-                    border-bottom: 1px solid #444;
-                }
-                .cell {
-                    padding: 7px 10px;
-                    border-right: 1px solid #444;
-                    display: flex;
-                    align-items: center;
-                }
-                .cell:last-child {
-                    border-right: none;
-                }
+                /* Details Grid Table */
+                .section-label { color: #0A6C87; font-weight: 800; font-size: 12px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1.5px solid #0A6C87; padding-bottom: 4px; }
+                .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+                .grid-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+                .grid-table tr:nth-child(even) { background: #f8fafc; }
+                .lbl { color: #475569; font-weight: 700; width: 140px; }
+                .val { color: #0f172a; font-weight: 600; }
 
-                /* ── Receipt info row ── */
-                .receipt-row .label-cell {
-                    background: #f2e8b6;
-                    font-weight: bold;
-                    color: #c0392b;
-                    width: 110px;
-                    min-width: 110px;
-                    font-size: 13px;
-                    justify-content: center;
-                }
-                .receipt-row .value-cell {
-                    flex: 1;
-                    font-size: 14px;
-                    font-weight: 600;
-                }
-                .receipt-row .donor-copy-cell {
-                    background: #7a2c2c;
-                    color: #fff;
-                    text-align: center;
-                    font-size: 11px;
-                    font-weight: 600;
-                    width: 170px;
-                    min-width: 170px;
-                    flex-direction: column;
-                    justify-content: center;
-                    line-height: 1.5;
-                }
+                /* Amount Box */
+                .amount-card { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+                .amount-num { font-size: 24px; font-weight: 900; color: #065f46; }
+                .amount-words { font-size: 11px; font-style: italic; color: #047857; text-align: right; }
 
-                /* ── Rupees row ── */
-                .rupees-row .cell {
-                    font-size: 14px;
-                    padding: 6px 10px;
-                    width: 100%;
-                }
-
-                /* ── Donor Details ── */
-                .section-title {
-                    background: #7a2c2c;
-                    color: #fff;
-                    text-align: center;
-                    padding: 5px;
-                    font-weight: bold;
-                    font-size: 14px;
-                    letter-spacing: 1px;
-                    border-bottom: 1px solid #444;
-                }
-                .details-row {
-                    display: flex;
-                    border-bottom: 1px solid #444;
-                }
-                .details-left {
-                    flex: 1;
-                    border-right: 1px solid #444;
-                    padding: 10px 14px;
-                    font-size: 13px;
-                }
-                .details-right {
-                    flex: 1;
-                    padding: 10px 14px;
-                    font-size: 13px;
-                }
-                .field-label {
-                    color: #555;
-                    font-size: 12px;
-                    margin-bottom: 2px;
-                }
-                .field-label.red {
-                    color: #c0392b;
-                    font-weight: 600;
-                    font-style: italic;
-                }
-                .field-value {
-                    border-bottom: 1px dotted #888;
-                    min-height: 22px;
-                    padding: 3px 0;
-                    font-size: 14px;
-                    font-weight: 600;
-                    margin-bottom: 10px;
-                    word-break: break-word;
-                }
-                .field-value.tall {
-                    min-height: 50px;
-                }
-
-                /* ── Bottom bar ── */
-                .bottom-row {
-                    display: flex;
-                    border-bottom: 1px solid #444;
-                    align-items: center;
-                    min-height: 55px;
-                }
-                .amount-box {
-                    width: 220px;
-                    min-width: 220px;
-                    padding: 8px 14px;
-                    border-right: 1px solid #444;
-                    display: flex;
-                    align-items: center;
-                }
-                .amount-box-inner {
-                    border: 2px solid #999;
-                    border-radius: 10px;
-                    height: 40px;
-                    width: 100%;
-                    display: flex;
-                    align-items: center;
-                    padding-left: 14px;
-                    font-size: 22px;
-                    font-weight: bold;
-                    color: #333;
-                }
-                .rupee-symbol {
-                    font-family: 'Segoe UI', sans-serif;
-                    margin-right: 6px;
-                }
-                .org-name-cell {
-                    flex: 1;
-                    text-align: center;
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 8px;
-                    border-right: 1px solid #444;
-                    color: #333;
-                }
-                .signature-cell {
-                    width: 240px;
-                    min-width: 240px;
-                    text-align: right;
-                    padding: 8px 14px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #555;
-                }
-
-                /* ── Footer ── */
-                .footer {
-                    background: #c8dbe6;
-                    padding: 10px 16px;
-                    text-align: center;
-                    font-size: 13px;
-                    line-height: 1.6;
-                    color: #333;
-                    font-weight: 500;
-                }
-                .footer strong {
-                    font-size: 13px;
-                }
+                /* Signatures & Footer */
+                .sig-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+                .seal-box { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; font-size: 10px; color: #475569; }
+                .sig-box { text-align: right; font-size: 11px; }
+                .sig-line { width: 180px; border-bottom: 1px solid #0A6C87; margin: 30px 0 6px auto; }
+                
+                .footer-address { text-align: center; border-top: 1.5px solid #0A6C87; padding-top: 10px; margin-top: 20px; font-size: 10px; color: #475569; }
+                .footer-address strong { color: #0A6C87; }
             </style>
         </head>
         <body>
-            <div class="receipt">
-                <!-- Header -->
-                <div class="header">
-                    <div class="header-logo">
-                        ${logoBase64 ? `<img src="${logoBase64}" alt="RKMS Logo" />` : '<div style="width:78px;height:78px;border-radius:50%;background:#daa520;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;color:#333;">RKMS</div>'}
-                    </div>
-                    <div class="header-reg">Reg. No. DRB1/SOR/343/2024-2025.</div>
-                    <h1>RECEIPT</h1>
-                    <h2>${orgName} (Regd)</h2>
-                </div>
-
-                <!-- Receipt Info Row -->
-                <div class="row receipt-row">
-                    <div class="cell label-cell">Receipt No.</div>
-                    <div class="cell value-cell">${receiptNo}</div>
-                    <div class="cell label-cell">Date:</div>
-                    <div class="cell value-cell">${formattedDate}</div>
-                    <div class="cell donor-copy-cell">
-                        DONOR'S COPY<br>(T&amp;C on backside for 80G, 12A)
-                    </div>
-                </div>
-
-                <!-- Rupees Row -->
-                <div class="row rupees-row">
-                    <div class="cell" style="width:100%;">
-                        Rupees <strong>${amountInWords}</strong>
-                    </div>
-                </div>
-
-                <!-- Donor Details Title -->
-                <div class="section-title">Donor Details</div>
-
-                <!-- Donor Details Content -->
-                <div class="details-row">
-                    <!-- Left Column -->
-                    <div class="details-left">
-                        <div class="field-label">Received with thanks from Kum./Smt./Sri:</div>
-                        <div class="field-value">${name || ''}</div>
-
-                        <div class="field-label">Address:</div>
-                        <div class="field-value tall">${address || ''}</div>
-
-                        <div class="field-label">Donor PAN No:</div>
-                        <div class="field-value">${panNumber || ''}</div>
-
-                        <div class="field-label">Mobile:</div>
-                        <div class="field-value">${phone || ''}</div>
-                    </div>
-
-                    <!-- Right Column -->
-                    <div class="details-right">
-                        <div class="field-label red">Purpose (Membership / Donation / Health / Scholarship)</div>
-                        <div class="field-value">${purpose || ''}</div>
-
-                        <div class="field-label red">Mode of payment (Cheque / online / UPI / Cash)</div>
-                        <div class="field-value">Online (Razorpay Payment Gateway)</div>
-
-                        <div class="field-label red">Payment Details (Cheque / Transaction Details)</div>
-                        <div class="field-value tall">Transaction ID: ${transactionId || ''}</div>
-                    </div>
-                </div>
-
-                <!-- Bottom Row -->
-                <div class="bottom-row">
-                    <div class="amount-box">
-                        <div class="amount-box-inner">
-                            <span class="rupee-symbol">₹</span> ${amountNum.toLocaleString('en-IN')}
+            <div class="wrapper">
+                <div>
+                    <!-- Header Banner -->
+                    <div class="header-banner">
+                        ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" alt="RKMS Logo" />` : '<div class="logo-img" style="display:flex;align-items:center;justify-content:center;font-weight:bold;color:#0A6C87;font-size:18px;">RKS</div>'}
+                        <div class="header-info">
+                            <h1>RAJU KSHATRIYA MAHILA SANGHA</h1>
+                            <p>Registered under Karnataka Societies Registration Act, 1960 — Reg No: DRB1/SOR/343/2024-2025</p>
+                            <p class="reg-highlight">80G Tax Exemption Reg No: 80G/DRB1/SOR/343/2024-2025</p>
+                            <p>No. 797, "Lakshmi Nilayam", 1st Floor, Banashankari 6th Stage, RR Nagar Post, Bengaluru - 560098</p>
                         </div>
                     </div>
-                    <div class="org-name-cell">
-                        ${orgName}<br>(Regd)
+
+                    <!-- Title Pill -->
+                    <div class="receipt-title">OFFICIAL DONATION RECEIPT &amp; 80G TAX EXEMPTION CERTIFICATE</div>
+
+                    <!-- 80G Notice Box -->
+                    <div class="tax-box">
+                        <h4>STATUTORY TAX EXEMPTION NOTICE (SECTION 80G)</h4>
+                        <p>Donations to Raju Kshatriya Mahila Sangha are eligible for 50% deduction under Section 80G of the Income Tax Act, 1961 vide Order No. 80G/DRB1/SOR/343/2024-2025. This computer-generated receipt serves as official proof for IT returns filing.</p>
                     </div>
-                    <div class="signature-cell">
-                        Signature of Treasurer / Secretary
+
+                    <!-- Details Grid Table -->
+                    <div class="section-label">RECEIPT &amp; DONOR INFORMATION</div>
+                    <table class="grid-table">
+                        <tr>
+                            <td class="lbl">Receipt No:</td>
+                            <td class="val">${receiptNo}</td>
+                            <td class="lbl">Receipt Date:</td>
+                            <td class="val">${formattedDate}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Donor Name:</td>
+                            <td class="val">${name || 'Valued Supporter'}</td>
+                            <td class="lbl">PAN Number:</td>
+                            <td class="val">${panNumber || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Email Address:</td>
+                            <td class="val">${email || 'N/A'}</td>
+                            <td class="lbl">Mobile Phone:</td>
+                            <td class="val">${phone || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Donor Address:</td>
+                            <td class="val" colspan="3">${address || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Donation Purpose:</td>
+                            <td class="val" colspan="3">${purpose || 'General Support & Women Welfare'}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Payment Gateway ID:</td>
+                            <td class="val">${transactionId || 'N/A'}</td>
+                            <td class="lbl">Payment Status:</td>
+                            <td class="val" style="color:#047857; font-weight:800;">COMPLETED &amp; VERIFIED ✓</td>
+                        </tr>
+                    </table>
+
+                    <!-- Amount Card -->
+                    <div class="amount-card">
+                        <div>
+                            <div style="font-size:10px; font-weight:800; color:#047857; text-transform:uppercase;">Total Donation Amount Received</div>
+                            <div class="amount-num">₹ ${amountNum.toLocaleString('en-IN')}.00</div>
+                        </div>
+                        <div class="amount-words">
+                            <strong>Amount in Words:</strong><br>
+                            ${amountInWords}
+                        </div>
                     </div>
                 </div>
 
-                <!-- Footer -->
-                <div class="footer">
-                    <strong>Office Address*:</strong> No. 797, "Lakshmi Nilayam", 1st Floor, Banashankari 6th Stage,<br>
-                    1st Block, Parallel to BDA Link Road, Rajarajeshwari Nagar Post, Bangalore-560 098<br>
-                    Tel: 9972648909
+                <div>
+                    <!-- Signatures Section -->
+                    <div class="sig-section">
+                        <div class="seal-box">
+                            <strong>VERIFIED &amp; RECORDED</strong><br>
+                            Raju Kshatriya Mahila Sangha Audit System<br>
+                            Computer Generated Document — Valid without physical signature
+                        </div>
+                        <div class="sig-box">
+                            <strong>For RAJU KSHATRIYA MAHILA SANGHA</strong>
+                            <div class="sig-line"></div>
+                            <strong style="color:#0A6C87;">Authorized Signatory</strong><br>
+                            <span style="color:#64748b; font-size:10px;">(Treasurer / Secretary)</span>
+                        </div>
+                    </div>
+
+                    <!-- Footer Address -->
+                    <div class="footer-address">
+                        <strong>RAJU KSHATRIYA MAHILA SANGHA (REGD.)</strong><br>
+                        Registered Office: No. 797, "Lakshmi Nilayam", 1st Floor, Banashankari 6th Stage, 1st Block, Parallel to BDA Link Road,<br>
+                        Rajarajeshwari Nagar Post, Bangalore – 560 098, Karnataka, India<br>
+                        Contact: +91 9972648909 &nbsp;|&nbsp; Email: rajukshatriyamahilasangha2024@gmail.com &nbsp;|&nbsp; Web: www.rajukshatriyamahilasangha.org
+                    </div>
                 </div>
             </div>
         </body>

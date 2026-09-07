@@ -1,9 +1,10 @@
-import { Heart, CreditCard, ShieldCheck, CheckCircle2, Download, Sparkles, BookOpen, HeartHandshake, Shield, Sparkle } from 'lucide-react';
+import { Heart, CreditCard, ShieldCheck, Sparkles, BookOpen, HeartHandshake } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { settingsApi, donationApi, paymentApi } from '../services/api';
 import { UserAuthModal } from './UserAuthModal';
+import { PaymentResultModal, type PaymentSuccessInfo, type PaymentFailureInfo } from './PaymentResultModal';
 
 interface Settings {
   donationSuggestions: number[];
@@ -20,11 +21,12 @@ export function Donate() {
   const [purpose, setPurpose] = useState('Women Empowerment & Education');
   const [panNumber, setPanNumber] = useState('');
   const [address, setAddress] = useState('');
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [receiptInfo, setReceiptInfo] = useState<any>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessInfo | null>(null);
+  const [paymentFailure, setPaymentFailure] = useState<PaymentFailureInfo | null>(null);
+  const [pendingAmount, setPendingAmount] = useState(0);
 
   // Auto prefill from user session
   useEffect(() => {
@@ -56,6 +58,64 @@ export function Donate() {
       }
     };
     fetchSettings();
+
+    const checkRazorpayRedirect = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const razorpay_payment_id = searchParams.get('razorpay_payment_id');
+      const razorpay_order_id = searchParams.get('razorpay_order_id');
+      const razorpay_signature = searchParams.get('razorpay_signature');
+
+      const errorCode = searchParams.get('error[code]') || searchParams.get('error_code');
+      const errorDesc = searchParams.get('error[description]') || searchParams.get('error_description') || searchParams.get('error[reason]');
+
+      if (razorpay_payment_id && razorpay_order_id) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        const storedPending = sessionStorage.getItem('pending_donation_data');
+        let pending = { amount: 1000, name: donorName, email: donorEmail, phone: donorPhone, purpose, panNumber, address };
+        if (storedPending) {
+          try {
+            pending = { ...pending, ...JSON.parse(storedPending) };
+          } catch (e) {}
+        }
+        sessionStorage.removeItem('pending_donation_data');
+        sessionStorage.removeItem('pending_donation_order_id');
+
+        await verifyAndCreateDonation({
+          razorpay_order_id,
+          razorpay_payment_id,
+          razorpay_signature: razorpay_signature || '',
+          amount: pending.amount,
+          name: pending.name || donorName,
+          email: pending.email || donorEmail,
+          phone: pending.phone || donorPhone,
+          purpose: pending.purpose || purpose,
+          panNumber: pending.panNumber || panNumber,
+          address: pending.address || address,
+        });
+      } else if (errorCode || errorDesc) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        const savedOrderId = sessionStorage.getItem('pending_donation_order_id');
+        const storedPending = sessionStorage.getItem('pending_donation_data');
+        let amt = 1000;
+        if (storedPending) {
+          try {
+            amt = JSON.parse(storedPending).amount || amt;
+          } catch (e) {}
+        }
+        sessionStorage.removeItem('pending_donation_data');
+        sessionStorage.removeItem('pending_donation_order_id');
+
+        setPaymentFailure({
+          type: 'donation',
+          reason: decodeURIComponent(errorDesc || 'Donation payment was declined or failed.'),
+          code: errorCode || undefined,
+          amount: amt,
+          orderId: savedOrderId || undefined,
+        });
+      }
+    };
+
+    checkRazorpayRedirect();
   }, []);
 
   const predefinedAmounts = settings?.donationSuggestions || [500, 1000, 2500, 5000, 10000];
@@ -98,6 +158,7 @@ export function Donate() {
 
   const startDonationProcess = async (amount: number) => {
     setIsLoading(true);
+    setPendingAmount(amount);
 
     try {
       const response = await donationApi.createOrder({
@@ -111,6 +172,11 @@ export function Donate() {
       });
 
       if (response.success && response.order && response.razorpayKeyId) {
+        try {
+          sessionStorage.setItem('pending_donation_data', JSON.stringify({ amount, name: donorName, email: donorEmail, phone: donorPhone, purpose, panNumber, address }));
+          sessionStorage.setItem('pending_donation_order_id', response.order.id);
+        } catch (e) {}
+
         const options = {
           key: response.razorpayKeyId,
           amount: response.order.amount,
@@ -118,7 +184,10 @@ export function Donate() {
           name: settings?.organizationName || 'Raju Kshatriya Mahila Sangha',
           description: 'Donation for Women Empowerment',
           order_id: response.order.id,
+          callback_url: window.location.href,
           handler: async function (razorpayResponse: any) {
+            sessionStorage.removeItem('pending_donation_data');
+            sessionStorage.removeItem('pending_donation_order_id');
             await verifyAndCreateDonation({
               ...razorpayResponse,
               amount,
@@ -129,6 +198,8 @@ export function Donate() {
           modal: {
             ondismiss: function () {
               paymentApi.cancelOrder(response.order.id, 'User closed donation checkout');
+              sessionStorage.removeItem('pending_donation_data');
+              sessionStorage.removeItem('pending_donation_order_id');
               toast.info('Donation payment was cancelled.');
             },
           },
@@ -141,6 +212,17 @@ export function Donate() {
         };
 
         const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', (resp: any) => {
+          sessionStorage.removeItem('pending_donation_data');
+          sessionStorage.removeItem('pending_donation_order_id');
+          setPaymentFailure({
+            type: 'donation',
+            reason: resp?.error?.description || resp?.error?.reason || 'Payment was declined by your bank or payment provider.',
+            code: resp?.error?.code,
+            amount,
+            orderId: resp?.error?.metadata?.order_id || response.order.id,
+          });
+        });
         rzp.open();
       } else {
         toast.error(response.message || 'Failed to create donation order');
@@ -169,14 +251,33 @@ export function Donate() {
       });
 
       if (response.success) {
-        setReceiptInfo(response.receipt);
-        setShowReceipt(true);
-        toast.success('Thank you for your generous donation!');
+        toast.success('Thank you for your generous donation! 💚');
+        setPaymentSuccess({
+          type: 'donation',
+          paymentId: paymentData.razorpay_payment_id || `PAY_${Date.now()}`,
+          orderId: paymentData.razorpay_order_id || `ORDER_${Date.now()}`,
+          amount: paymentData.amount || pendingAmount,
+          date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          donorName: paymentData.name || donorName,
+          donorEmail: paymentData.email || donorEmail,
+          donorPhone: donorPhone,
+          purpose: purpose,
+          receiptDownloadUrl: response.receipt?.downloadUrl,
+        });
       } else {
-        toast.error(response.message || 'Payment verification failed');
+        setPaymentFailure({
+          type: 'donation',
+          reason: response.message || 'Payment verification failed. Please contact support.',
+          amount: paymentData.amount || pendingAmount,
+          orderId: paymentData.razorpay_order_id,
+        });
       }
     } catch (error) {
-      toast.error('Error verifying donation payment');
+      setPaymentFailure({
+        type: 'donation',
+        reason: 'An unexpected error occurred while verifying your payment.',
+        amount: pendingAmount,
+      });
     }
   };
 
@@ -239,7 +340,7 @@ export function Donate() {
           </div>
 
           {/* Right Column: Donation Form & Amount Selector */}
-          <div className="lg:col-span-7 bg-white rounded-2xl shadow-xl border border-gray-200 p-8 space-y-6">
+          <div className="lg:col-span-7 bg-white rounded-2xl shadow-xl border border-gray-200 p-4 sm:p-8 space-y-6">
             <h3 className="text-xl font-bold text-gray-900 border-b pb-3 flex items-center gap-2">
               <Heart className="w-5 h-5 text-[#E5C100]" />
               Select Donation Amount
@@ -248,7 +349,7 @@ export function Donate() {
             {/* Amount Selector Chips */}
             <div className="space-y-3">
               <label className="block text-xs font-semibold text-gray-700">Choose Amount (₹)</label>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {predefinedAmounts.map((amt) => (
                   <button
                     key={amt}
@@ -344,37 +445,14 @@ export function Donate() {
         </div>
       </section>
 
-      {/* Receipt Modal */}
-      {showReceipt && receiptInfo && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center space-y-4">
-            <div className="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900">Donation Successful!</h3>
-            <p className="text-xs text-gray-600">
-              Thank you for your generous contribution of ₹{Number(receiptInfo?.amount || ((customAmount && !isNaN(parseFloat(customAmount))) ? parseFloat(customAmount) : selectedAmount || 0)).toLocaleString('en-IN')}.
-            </p>
-
-            <a
-              href={receiptInfo.downloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-[#0A6C87] text-white px-6 py-2.5 rounded-lg font-bold text-xs hover:bg-cyan-800 transition-colors shadow-md"
-            >
-              <Download className="w-4 h-4" /> Download Official Receipt (PDF)
-            </a>
-
-            <div>
-              <button
-                onClick={() => setShowReceipt(false)}
-                className="text-xs text-gray-500 hover:underline pt-2"
-              >
-                Close Window
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Payment Result Modal */}
+      {(paymentSuccess || paymentFailure) && (
+        <PaymentResultModal
+          success={paymentSuccess}
+          failure={paymentFailure}
+          onClose={() => { setPaymentSuccess(null); setPaymentFailure(null); }}
+          onRetry={() => startDonationProcess(pendingAmount)}
+        />
       )}
 
       <UserAuthModal

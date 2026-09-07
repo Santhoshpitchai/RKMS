@@ -50,10 +50,8 @@ const protect = async (req, res, next) => {
             } catch (supaErr) {
                 console.warn('Supabase auth check warning:', supaErr.message);
             }
-        }
-
-        // MySQL Fallback check
-        if (!admin) {
+        } else {
+            // MySQL fallback check only if Supabase not configured
             try {
                 const [rows] = await pool.query(
                     'SELECT id, username, created_at FROM admins WHERE id = ? LIMIT 1',
@@ -62,9 +60,7 @@ const protect = async (req, res, next) => {
                 if (rows && rows.length) {
                     admin = rows[0];
                 }
-            } catch (mysqlErr) {
-                // ignore
-            }
+            } catch (mysqlErr) {}
         }
 
         if (!admin) {

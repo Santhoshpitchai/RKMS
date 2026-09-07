@@ -400,6 +400,29 @@ const registerEvent = async (req, res) => {
     }
 };
 
+// Helper: parse body image_urls
+const parseBodyImageUrls = (req) => {
+    const urls = [];
+    if (req.body.image_urls) {
+        try {
+            const parsed = typeof req.body.image_urls === 'string' ? JSON.parse(req.body.image_urls) : req.body.image_urls;
+            if (Array.isArray(parsed)) {
+                parsed.forEach(u => {
+                    if (typeof u === 'string' && u.trim()) urls.push(u.trim());
+                });
+            }
+        } catch (e) {
+            if (typeof req.body.image_urls === 'string' && req.body.image_urls.trim()) {
+                urls.push(req.body.image_urls.trim());
+            }
+        }
+    }
+    if (urls.length === 0 && req.body.image_url && typeof req.body.image_url === 'string' && req.body.image_url.trim()) {
+        urls.push(req.body.image_url.trim());
+    }
+    return urls;
+};
+
 // Create event (admin only)
 const createEvent = async (req, res) => {
     try {
@@ -408,17 +431,15 @@ const createEvent = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        // Gather uploaded files: single 'image' field OR multiple 'eventImages' array
+        // Gather uploaded files
         const singleFile = req.file;
         const multiFiles = req.files || [];
         const allFiles = singleFile ? [singleFile, ...multiFiles] : multiFiles;
-        const imageUrls = await uploadMultipleImages(allFiles);
+        const uploadedUrls = await uploadMultipleImages(allFiles);
 
-        // Also accept URL strings from body
-        if (req.body.image_url && /^https?:\/\//i.test(String(req.body.image_url).trim()) && imageUrls.length === 0) {
-            imageUrls.push(String(req.body.image_url).trim());
-        }
-
+        // Gather URL strings from body (if provided)
+        const bodyUrls = parseBodyImageUrls(req);
+        const imageUrls = [...bodyUrls, ...uploadedUrls];
         const primaryImageUrl = imageUrls[0] || null;
 
         const { title, description, date, location, category, price, is_free } = req.body;
@@ -443,7 +464,7 @@ const createEvent = async (req, res) => {
                 .single();
 
             if (!supaErr && newEvent) {
-                // Save additional images
+                // Save all images to event_images table
                 await saveEventImages(newEvent.id, imageUrls);
                 invalidateEventsCache();
                 broadcastRealtimeEvent('events_updated', { action: 'created', event: newEvent });
@@ -485,14 +506,12 @@ const updateEvent = async (req, res) => {
         const singleFile = req.file;
         const multiFiles = req.files || [];
         const allFiles = singleFile ? [singleFile, ...multiFiles] : multiFiles;
-        const newImageUrls = await uploadMultipleImages(allFiles);
+        const newUploadedUrls = await uploadMultipleImages(allFiles);
 
-        // Accept body URL if no file uploaded
-        if (req.body.image_url && newImageUrls.length === 0) {
-            newImageUrls.push(String(req.body.image_url).trim());
-        }
-
-        const primaryImageUrl = newImageUrls.length > 0 ? newImageUrls[0] : undefined;
+        // Accept existing image URLs passed in req.body.image_urls
+        const bodyUrls = parseBodyImageUrls(req);
+        const finalImageUrls = [...bodyUrls, ...newUploadedUrls];
+        const primaryImageUrl = finalImageUrls.length > 0 ? finalImageUrls[0] : null;
 
         const { title, description, date, location, category, price, is_free } = req.body;
         const numPrice = Number(price || 0);
@@ -508,7 +527,9 @@ const updateEvent = async (req, res) => {
                 price: numPrice,
                 is_free: isFree
             };
-            if (primaryImageUrl !== undefined) updatePayload.image_url = primaryImageUrl;
+            if (primaryImageUrl !== null || req.body.image_urls !== undefined) {
+                updatePayload.image_url = primaryImageUrl;
+            }
 
             const { data: updatedEvent, error: supaErr } = await supabase
                 .from('events')
@@ -518,9 +539,40 @@ const updateEvent = async (req, res) => {
                 .single();
 
             if (!supaErr && updatedEvent) {
-                if (newImageUrls.length > 0) {
-                    await saveEventImages(updatedEvent.id, newImageUrls);
+                if (finalImageUrls.length > 0 || req.body.image_urls !== undefined) {
+                    await saveEventImages(updatedEvent.id, finalImageUrls);
                 }
+
+                // If event changed from free to paid, update existing registrations to require payment
+                if (!isFree && numPrice > 0) {
+                    try {
+                        const { data: existingRegs } = await supabase
+                            .from('event_registrations')
+                            .select('id, number_of_attendees, payment_amount, payment_status')
+                            .eq('event_id', Number(id))
+                            .neq('payment_status', 'cancelled_by_admin')
+                            .neq('payment_status', 'cancelled_by_member');
+
+                        if (existingRegs && existingRegs.length > 0) {
+                            for (const reg of existingRegs) {
+                                const attendees = reg.number_of_attendees || 1;
+                                const requiredAmount = numPrice * attendees;
+                                if (reg.payment_amount < requiredAmount || (reg.payment_status === 'completed' && Number(reg.payment_amount || 0) === 0)) {
+                                    await supabase
+                                        .from('event_registrations')
+                                        .update({
+                                            payment_status: 'pending',
+                                            payment_amount: requiredAmount
+                                        })
+                                        .eq('id', reg.id);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Update registrations on event price change warning:', e.message);
+                    }
+                }
+
                 // Fetch current images to return
                 const imagesMap = await fetchEventImages([updatedEvent.id]);
                 const images = imagesMap[updatedEvent.id] || (updatedEvent.image_url ? [updatedEvent.image_url] : []);
@@ -528,20 +580,23 @@ const updateEvent = async (req, res) => {
                 broadcastRealtimeEvent('events_updated', { action: 'updated', event: updatedEvent });
                 return res.status(200).json({
                     success: true,
-                    message: 'Event updated successfully',
+                    message: 'Event updated successfully and registrations updated to pending payment',
                     event: { ...updatedEvent, images }
                 });
             }
         }
 
         // MySQL Fallback
-        await pool.query(
-            `UPDATE events
-             SET title = ?, description = ?, date = ?, location = ?, category = ?, price = ?, is_free = ?
-             WHERE id = ?`,
-            [title, description, date, location, category || 'upcoming', numPrice, isFree, id]
-        );
+        const updateParams = [title, description, date, location, category || 'upcoming', numPrice, isFree];
+        let sql = `UPDATE events SET title = ?, description = ?, date = ?, location = ?, category = ?, price = ?, is_free = ?`;
+        if (primaryImageUrl !== null || req.body.image_urls !== undefined) {
+            sql += `, image_url = ?`;
+            updateParams.push(primaryImageUrl);
+        }
+        sql += ` WHERE id = ?`;
+        updateParams.push(id);
 
+        await pool.query(sql, updateParams);
         const [rows] = await pool.query('SELECT * FROM events WHERE id = ? LIMIT 1', [id]);
 
         invalidateEventsCache();
@@ -549,7 +604,7 @@ const updateEvent = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'Event updated successfully',
-            event: { ...rows[0], images: primaryImageUrl ? [primaryImageUrl] : [] }
+            event: { ...rows[0], images: finalImageUrls }
         });
     } catch (error) {
         console.error('Update event error:', error);
@@ -589,10 +644,93 @@ const deleteEvent = async (req, res) => {
     }
 };
 
+// Cancel or Delete an event registration with IDOR ownership check
+const cancelRegistration = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const cancelledBy = req.body?.by || req.query?.by || 'member';
+        const isDelete = req.body?.action === 'delete' || req.query?.action === 'delete';
+        const newStatus = cancelledBy === 'admin' ? 'cancelled_by_admin' : 'cancelled_by_member';
+
+        const numId = Number(id);
+
+        if (isSupabaseConfigured()) {
+            // IDOR Protection: Fetch registration first to verify ownership
+            let query = supabase.from('event_registrations').select('*');
+            if (!isNaN(numId) && numId > 0) {
+                query = query.eq('id', numId);
+            } else {
+                query = query.eq('registration_id', id);
+            }
+
+            const { data: regRecord } = await query.maybeSingle();
+
+            if (!regRecord) {
+                return res.status(404).json({ success: false, message: 'Event registration not found' });
+            }
+
+            // Verify Ownership / Admin Privilege
+            const authUser = req.user || {};
+            const isAdmin = req.admin || authUser.role === 'admin';
+
+            if (!isAdmin) {
+                const userEmail = authUser.email ? authUser.email.trim().toLowerCase() : '';
+                const regEmail = regRecord.email ? regRecord.email.trim().toLowerCase() : '';
+
+                const isOwner = Boolean(userEmail && regEmail && userEmail === regEmail);
+                const isMemOwner = Boolean(authUser.membership_id && regRecord.membership_id && authUser.membership_id === regRecord.membership_id);
+
+                if (!isOwner && !isMemOwner) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Forbidden. You are not authorized to cancel or modify another user\'s event registration.'
+                    });
+                }
+            }
+
+            let supaErr = null;
+            if (isDelete) {
+                if (!isNaN(numId) && numId > 0) {
+                    const { error } = await supabase.from('event_registrations').delete().eq('id', numId);
+                    supaErr = error;
+                } else {
+                    const { error } = await supabase.from('event_registrations').delete().eq('registration_id', id);
+                    supaErr = error;
+                }
+            } else {
+                if (!isNaN(numId) && numId > 0) {
+                    const { error } = await supabase.from('event_registrations').update({ payment_status: newStatus }).eq('id', numId);
+                    supaErr = error;
+                } else {
+                    const { error } = await supabase.from('event_registrations').update({ payment_status: newStatus }).eq('registration_id', id);
+                    supaErr = error;
+                }
+            }
+
+            if (supaErr) {
+                console.warn('Supabase cancelRegistration notice:', supaErr.message);
+            }
+
+            invalidateEventsCache();
+            broadcastRealtimeEvent('events_updated', { action: isDelete ? 'registration_deleted' : 'registration_cancelled', id, status: newStatus });
+            return res.status(200).json({ 
+                success: true, 
+                message: isDelete ? 'Registration deleted permanently' : 'Registration marked as cancelled' 
+            });
+        }
+
+        return res.status(503).json({ success: false, message: 'Database service unavailable' });
+    } catch (error) {
+        console.error('Cancel registration error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update registration status' });
+    }
+};
+
 module.exports = {
     getEvents,
     createEventOrder,
     registerEvent,
+    cancelRegistration,
     createEvent,
     updateEvent,
     deleteEvent,

@@ -13,7 +13,7 @@ interface UserAuthModalProps {
 
 export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthModalProps) {
   const { t } = useLanguage();
-  const [mode, setMode] = useState<'login' | 'register'>('register');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('register');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -25,6 +25,13 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
   const [targetEmail, setTargetEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
+
+  // Forgot password state
+  const [forgotStep, setForgotStep] = useState<'email' | 'reset'>('email');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     let interval: any;
@@ -41,6 +48,11 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
     setOtpCode('');
     setTargetEmail('');
     setIsVerifyingOtp(false);
+    setForgotStep('email');
+    setForgotEmail('');
+    setResetOtp('');
+    setNewPassword('');
+    setConfirmPassword('');
   };
 
   useEffect(() => {
@@ -54,7 +66,7 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
     onClose();
   };
 
-  const handleModeChange = (newMode: 'login' | 'register') => {
+  const handleModeChange = (newMode: 'login' | 'register' | 'forgot') => {
     setMode(newMode);
     resetFields();
   };
@@ -147,6 +159,67 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
     }
   };
 
+  const handleRequestForgotOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!forgotEmail || !emailRegex.test(forgotEmail.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await userApi.forgotPassword({ email: forgotEmail.trim() });
+      if (response.success) {
+        toast.success(response.message || 'Verification code sent to your email!');
+        setForgotStep('reset');
+      } else {
+        toast.error(response.message || 'Failed to send OTP');
+      }
+    } catch (err) {
+      toast.error('Error requesting password reset OTP');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetOtp || resetOtp.trim().length !== 6) {
+      toast.error('Please enter the 6-digit OTP code');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters long');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await userApi.resetPassword({
+        email: forgotEmail.trim(),
+        otp: resetOtp.trim(),
+        newPassword
+      });
+
+      if (response.success) {
+        toast.success('Password reset successfully! Please sign in with your new password.');
+        setMode('login');
+        setFormData((prev) => ({ ...prev, email: forgotEmail.trim() }));
+      } else {
+        toast.error(response.message || 'Failed to reset password');
+      }
+    } catch (err) {
+      toast.error('Error resetting password');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpCode || otpCode.trim().length !== 6) {
@@ -206,7 +279,7 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 cursor-default"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 cursor-default max-h-[92vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-[#0A6C87] to-cyan-600 p-6 text-white relative">
@@ -223,15 +296,25 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">{isVerifyingOtp ? 'Verify Email Address' : title || 'Account Required'}</h2>
+              <h2 className="text-xl font-bold">
+                {isVerifyingOtp 
+                  ? 'Verify Email Address' 
+                  : mode === 'forgot'
+                  ? 'Reset Your Password'
+                  : title || 'Account Required'}
+              </h2>
               <p className="text-cyan-100 text-xs">
-                {isVerifyingOtp ? `Enter code sent to ${targetEmail}` : 'Please sign in or create an account to proceed'}
+                {isVerifyingOtp 
+                  ? `Enter code sent to ${targetEmail}` 
+                  : mode === 'forgot'
+                  ? 'Follow the steps to recover your account'
+                  : 'Please sign in or create an account to proceed'}
               </p>
             </div>
           </div>
 
-          {/* Mode Tabs (Only when not in OTP mode) */}
-          {!isVerifyingOtp && (
+          {/* Mode Tabs (Only when not in OTP mode or Forgot mode) */}
+          {!isVerifyingOtp && mode !== 'forgot' && (
             <div className="flex bg-black/20 p-1 rounded-xl mt-4">
               <button
                 type="button"
@@ -257,8 +340,114 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
           )}
         </div>
 
-        {/* OTP VERIFICATION MODE */}
-        {isVerifyingOtp ? (
+        {/* FORGOT PASSWORD MODE */}
+        {mode === 'forgot' ? (
+          forgotStep === 'email' ? (
+            <form onSubmit={handleRequestForgotOtp} className="p-6 space-y-4">
+              <div className="text-center space-y-1 mb-2">
+                <h3 className="text-base font-bold text-gray-900">Forgot Your Password?</h3>
+                <p className="text-xs text-gray-600">Enter your registered email address to receive a 6-digit verification code.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Email Address *</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="your.email@example.com"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-[#E5C100] text-[#0A6C87] py-3 rounded-lg font-bold text-sm hover:bg-[#CCA900] transition-colors shadow-md disabled:opacity-50 mt-2"
+              >
+                {isLoading ? 'Sending Code...' : 'Send Verification OTP'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleModeChange('login')}
+                className="w-full text-center text-xs text-gray-500 hover:text-gray-800 transition-colors pt-2 block"
+              >
+                Back to Sign In
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleResetPasswordSubmit} className="p-6 space-y-4">
+              <div className="text-center space-y-1 mb-2">
+                <h3 className="text-base font-bold text-gray-900">Reset Your Password</h3>
+                <p className="text-xs text-gray-600">Enter the 6-digit code sent to <strong>{forgotEmail}</strong> and your new password.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1 text-center">6-Digit Verification Code *</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={resetOtp}
+                  onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ''))}
+                  placeholder="123456"
+                  className="w-full text-center text-xl font-mono tracking-[8px] font-bold py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">New Password *</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Confirm New Password *</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-[#E5C100] text-[#0A6C87] py-3 rounded-lg font-bold text-sm hover:bg-[#CCA900] transition-colors shadow-md disabled:opacity-50 mt-2"
+              >
+                {isLoading ? 'Resetting Password...' : 'Reset Password & Sign In'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setForgotStep('email')}
+                className="w-full text-center text-xs text-gray-500 hover:text-gray-800 transition-colors pt-1 block"
+              >
+                Change Email
+              </button>
+            </form>
+          )
+        ) : isVerifyingOtp ? (
           <form onSubmit={handleVerifyOtp} className="p-6 space-y-5">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 bg-cyan-50 text-[#0A6C87] rounded-full flex items-center justify-center mx-auto">
@@ -325,7 +514,7 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Enter your full name"
-                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
                     required
                   />
                 </div>
@@ -341,7 +530,7 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="your.email@example.com"
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
                   required
                 />
               </div>
@@ -357,7 +546,7 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="+91 98765 43210"
-                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
                   />
                 </div>
               </div>
@@ -372,10 +561,21 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Enter password"
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
                   required
                 />
               </div>
+              {mode === 'login' && (
+                <div className="flex justify-end mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange('forgot')}
+                    className="text-xs text-[#0A6C87] hover:underline font-semibold"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
@@ -395,3 +595,4 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
     </div>
   );
 }
+

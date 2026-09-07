@@ -12,6 +12,7 @@ import { Membership } from './components/Membership';
 import { Donate } from './components/Donate';
 import { MemberDashboard } from './components/MemberDashboard';
 import { VerifyMember } from './components/VerifyMember';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 export default function App() {
   const [user, setUser] = useState<{ name: string; email: string; phone?: string } | null>(null);
@@ -33,7 +34,8 @@ export default function App() {
     }
 
     if (storedToken) {
-      setUser({ name: 'Active Member', email: '' });
+      const storedEmail = localStorage.getItem('userEmail') || '';
+      setUser({ name: 'Active Member', email: storedEmail });
       return;
     }
 
@@ -62,38 +64,40 @@ export default function App() {
   };
 
   return (
-    <Router>
-      <Toaster position="top-right" richColors />
-      <ScrollToTop />
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header />
-        <main className="flex-1">
-          {user ? (
-            /* Logged-In Member Portal with explicit Route URL Sync */
-            <Routes>
-              <Route path="/dashboard" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
-              <Route path="/membership" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
-              <Route path="/donate" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
-              <Route path="/events" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
-              <Route path="/settings" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
-              <Route path="*" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
-            </Routes>
-          ) : (
-            /* Public Marketing Site */
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/about" element={<AboutUs />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/events" element={<Events />} />
-              <Route path="/verify-member" element={<VerifyMember />} />
-              <Route path="/membership" element={<Membership />} />
-              <Route path="/donate" element={<Donate />} />
-              <Route path="*" element={<LandingPage />} />
-            </Routes>
-          )}
-        </main>
-        {!user && <Footer />}
-      </div>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <Toaster position="top-right" richColors />
+        <ScrollToTop />
+        <div className="min-h-screen flex flex-col bg-gray-50">
+          <Header />
+          <main className="flex-1">
+            {user ? (
+              /* Logged-In Member Portal with explicit Route URL Sync */
+              <Routes>
+                <Route path="/dashboard" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
+                <Route path="/membership" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
+                <Route path="/donate" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
+                <Route path="/events" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
+                <Route path="/settings" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
+                <Route path="*" element={<MemberDashboard user={user} onLogout={handleLogout} />} />
+              </Routes>
+            ) : (
+              /* Public Marketing Site */
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/about" element={<AboutUs />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/events" element={<Events />} />
+                <Route path="/verify-member" element={<VerifyMember />} />
+                <Route path="/membership" element={<Membership />} />
+                <Route path="/donate" element={<Donate />} />
+                <Route path="*" element={<LandingPage />} />
+              </Routes>
+            )}
+          </main>
+          {!user && <Footer />}
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }

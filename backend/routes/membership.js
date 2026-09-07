@@ -30,8 +30,10 @@ const membershipValidation = [
     body('aadharNumber').optional({ checkFalsy: true }).trim(),
 ];
 
+const { userOrAdminAuth } = require('../middlewares/userAuth');
+
 // Check existing membership status by email
-router.get('/status', getMembershipStatus);
+router.get('/status', userOrAdminAuth, getMembershipStatus);
 
 // Create membership order
 router.post('/create-order', membershipValidation, createMembershipOrder);
@@ -39,10 +41,10 @@ router.post('/create-order', membershipValidation, createMembershipOrder);
 // Verify membership payment
 router.post('/verify-payment', uploadMemberPhoto, verifyMembershipPayment);
 
-// Update membership profile details
-router.put('/update', updateMembershipDetails);
+// Update membership profile details (supports photo upload)
+router.put('/update', userOrAdminAuth, uploadMemberPhoto, updateMembershipDetails);
 
 // Cancel / delete membership
-router.delete('/cancel', cancelMembership);
+router.delete('/cancel', userOrAdminAuth, cancelMembership);
 
 module.exports = router;

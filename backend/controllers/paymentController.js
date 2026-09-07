@@ -486,20 +486,16 @@ const cancelOrder = async (req, res) => {
     }
 
     if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-      try {
-        await supabase
-          .from('payments')
-          .update({ status: 'cancelled' })
-          .eq('order_id', order_id)
-          .eq('status', 'pending');
-      } catch (supaErr) {
-        console.warn('Supabase payment cancel warning:', supaErr.message);
+      const { error } = await supabase
+        .from('payments')
+        .update({ status: 'cancelled' })
+        .eq('order_id', order_id)
+        .eq('status', 'pending');
+
+      if (error) {
+        console.warn('Supabase payment cancel warning:', error.message);
       }
     }
-
-    try {
-      await pool.query("UPDATE payments SET status = 'cancelled' WHERE order_id = ? AND status = 'pending'", [order_id]);
-    } catch (mysqlErr) {}
 
     broadcastRealtimeEvent('payment_cancelled', { order_id, reason: reason || 'User cancelled' });
 

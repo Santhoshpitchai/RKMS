@@ -11,7 +11,9 @@ const {
     resetPassword,
     getAllAdmins,
     deleteAdmin,
-    fetchAuditLogs
+    fetchAuditLogs,
+    requestAdminForgotPasswordOtp,
+    resetAdminPassword
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -22,8 +24,10 @@ const loginValidation = [
     body('password').notEmpty().withMessage('Password is required'),
 ];
 
-// Public routes (only login is unauthenticated)
+// Public routes (login and forgot password are unauthenticated)
 router.post('/login', loginValidation, adminLogin);
+router.post('/forgot-password', requestAdminForgotPasswordOtp);
+router.post('/reset-password-otp', resetAdminPassword);
 
 // Protected routes (require valid admin JWT authentication)
 router.use(protect); // Apply auth middleware to all routes below

@@ -1,8 +1,8 @@
 import { AdminLayout } from './AdminLayout';
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Download, Calendar, RefreshCw, Users, ShieldCheck, Sparkles } from 'lucide-react';
+import { Search, Download, Calendar, RefreshCw, Users, ShieldCheck, Sparkles, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { adminApi } from '../../services/api';
+import { adminApi, resolveBackendAssetUrl } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 
 interface Member {
@@ -299,7 +299,22 @@ export function MemberManagement() {
                   {filteredMembers.map((member) => (
                     <tr key={member.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-900/50'}`}>
                       <td className="py-3 px-4 font-mono font-bold text-cyan-600">{member.membershipId}</td>
-                      <td className={`py-3 px-4 font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{member.name}</td>
+                      <td className={`py-3 px-4 font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                        <div className="flex items-center gap-2.5">
+                          {member.photoUrl ? (
+                            <img
+                              src={resolveBackendAssetUrl(member.photoUrl)}
+                              alt={member.name}
+                              className="w-8 h-9 object-cover rounded-lg border border-slate-300 flex-shrink-0 shadow-sm"
+                            />
+                          ) : (
+                            <div className="w-8 h-9 bg-cyan-500/10 text-cyan-600 rounded-lg border border-cyan-500/20 flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                              {member.name ? member.name.charAt(0).toUpperCase() : 'M'}
+                            </div>
+                          )}
+                          <span>{member.name}</span>
+                        </div>
+                      </td>
                       <td className={`py-3 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.gotraName || member.guardianName || '-'}</td>
                       <td className="py-3 px-4">
                         <div className={isLight ? 'text-slate-800' : 'text-slate-200'}>{member.email}</div>

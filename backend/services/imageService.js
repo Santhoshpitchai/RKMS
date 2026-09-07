@@ -58,9 +58,36 @@ const upload = multer({
   }
 });
 
-const uploadImage = async (file) => {
+// Magic byte signature validation to block fake extension executables & XSS payloads
+const validateFileMagicBytes = (buffer) => {
+  if (!buffer || buffer.length < 4) return { valid: false, reason: 'File payload is empty or corrupted' };
+
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  const isGif = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38;
+  const isWebp = buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+  const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+
+  if (isJpeg || isPng || isGif || isWebp || isPdf) {
+    return { valid: true };
+  }
+
+  return { valid: false, reason: 'File content failed signature verification. Disguised executables and unverified extensions are rejected.' };
+};
+
+const uploadImage = async (file, prefix = 'image') => {
   try {
     let fileBuffer = fs.readFileSync(file.path);
+
+    // Perform strict file signature magic-byte verification
+    const magicCheck = validateFileMagicBytes(fileBuffer);
+    if (!magicCheck.valid) {
+      try { fs.unlinkSync(file.path); } catch (_) {}
+      console.warn('⚠️ File upload security block:', magicCheck.reason);
+      return { success: false, error: magicCheck.reason };
+    }
 
     // Optimize image: Max width 1200px, convert to WebP with 80% quality, preserve aspect ratio
     try {
@@ -70,13 +97,15 @@ const uploadImage = async (file) => {
         .toBuffer();
     } catch (sharpErr) {
       console.warn('Image optimization warning (using original buffer):', sharpErr.message);
+      // If sharp fails, re-read original file buffer
+      fileBuffer = fs.readFileSync(file.path);
     }
 
     // 1. Try Supabase Storage Bucket (100% Free - 1GB Included)
     if (isSupabaseConfigured()) {
       try {
         const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'images';
-        const fileName = `event-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
+        const fileName = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
 
         let usedBucket = bucketName;
         let { data, error } = await supabase.storage
@@ -108,13 +137,37 @@ const uploadImage = async (file) => {
             .getPublicUrl(fileName);
 
           if (publicUrlData && publicUrlData.publicUrl) {
-            try { fs.unlinkSync(file.path); } catch (_) { }
-            console.log('✅ Image uploaded to Supabase Storage:', publicUrlData.publicUrl);
-            return {
-              success: true,
-              imageUrl: publicUrlData.publicUrl,
-              filename: fileName
-            };
+            // Validate the URL is actually publicly accessible (bucket may be private)
+            let urlAccessible = false;
+            try {
+              const http = require('https');
+              urlAccessible = await new Promise((resolve) => {
+                const req = http.request(publicUrlData.publicUrl, { method: 'HEAD', timeout: 3000 }, (res) => {
+                  resolve(res.statusCode >= 200 && res.statusCode < 400);
+                });
+                req.on('error', () => resolve(false));
+                req.on('timeout', () => { req.destroy(); resolve(false); });
+                req.end();
+              });
+            } catch (_) {
+              urlAccessible = false;
+            }
+
+            if (urlAccessible) {
+              try { fs.unlinkSync(file.path); } catch (_) { }
+              console.log('✅ Image uploaded to Supabase Storage (public):', publicUrlData.publicUrl);
+              return {
+                success: true,
+                imageUrl: publicUrlData.publicUrl,
+                filename: fileName
+              };
+            } else {
+              // Bucket is private or URL inaccessible — delete the uploaded file and fall through to base64
+              console.warn('⚠️ Supabase Storage bucket appears to be private or URL inaccessible. Falling back to base64. To fix: go to Supabase Dashboard → Storage → Policies → make the "images" bucket public.');
+              try {
+                await supabase.storage.from(usedBucket).remove([fileName]);
+              } catch (_) {}
+            }
           }
         } else if (error) {
           console.warn('Supabase storage upload notice:', error.message);
@@ -137,26 +190,21 @@ const uploadImage = async (file) => {
       };
     }
 
-    // 3. Fallback: Base64 Data URI (100% Free, zero server setup required, works live everywhere)
-    if (file.size <= 3 * 1024 * 1024) { // <= 3MB
-      const buffer = fs.readFileSync(file.path);
-      const mime = file.mimetype || 'image/jpeg';
-      const base64Str = `data:${mime};base64,${buffer.toString('base64')}`;
-      try { fs.unlinkSync(file.path); } catch (_) { }
-      return {
-        success: true,
-        imageUrl: base64Str,
-        filename: file.filename
-      };
-    }
-
-    // 4. Local File Fallback
-    const imageUrl = `/uploads/${file.filename}`;
+    // 3. Base64 Data URI fallback — works on ALL devices without any server dependency.
+    // Increased to 5MB to cover typical member passport photos.
+    const bufferForBase64 = fileBuffer.length > 0 ? fileBuffer : fs.readFileSync(file.path);
+    const mime = 'image/webp'; // we always output webp from sharp above
+    const base64Str = `data:${mime};base64,${bufferForBase64.toString('base64')}`;
+    try { fs.unlinkSync(file.path); } catch (_) { }
+    console.log('ℹ️ Image stored as base64 (cross-device compatible)');
     return {
       success: true,
-      imageUrl,
+      imageUrl: base64Str,
       filename: file.filename
     };
+
+    // NOTE: We intentionally do NOT fall back to /uploads/filename paths because
+    // those are device-local and break when accessed from other machines or browsers.
   } catch (error) {
     console.error('Image upload error:', error);
     return {

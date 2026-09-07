@@ -58,8 +58,13 @@ export const settingsApi = {
 // Membership API
 export const membershipApi = {
   getStatus: async (email: string) => {
-    const response = await fetch(`${API_BASE_URL}/membership/status?email=${encodeURIComponent(email)}`);
-    return response.json() as Promise<ApiResponse<any> & { exists?: boolean; member?: any }>;
+    const token = localStorage.getItem('userToken');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${API_BASE_URL}/membership/status?email=${encodeURIComponent(email)}`, { headers });
+    return response.json() as Promise<ApiResponse<any> & { exists?: boolean; member?: any; payments?: any[] }>;
   },
 
   createOrder: async (memberData: {
@@ -134,6 +139,9 @@ export const membershipApi = {
   updateDetails: async (updateData: {
     email: string;
     name?: string;
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
     phone?: string;
     guardianName?: string;
     gotraName?: string;
@@ -143,19 +151,47 @@ export const membershipApi = {
     city?: string;
     state?: string;
     pincode?: string;
+    photo?: File;
   }) => {
+    const token = localStorage.getItem('userToken');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    if (updateData.photo) {
+      const formData = new FormData();
+      Object.keys(updateData).forEach(key => {
+        if (key !== 'photo' && updateData[key as keyof typeof updateData] !== undefined) {
+          formData.append(key, updateData[key as keyof typeof updateData] as string);
+        }
+      });
+      formData.append('photo', updateData.photo);
+      const response = await fetch(`${API_BASE_URL}/membership/update`, {
+        method: 'PUT',
+        headers,
+        body: formData,
+      });
+      return response.json() as Promise<ApiResponse<any>>;
+    }
+
     const response = await fetch(`${API_BASE_URL}/membership/update`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
     });
     return response.json() as Promise<ApiResponse<any>>;
   },
 
   cancel: async (email: string) => {
+    const token = localStorage.getItem('userToken');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/membership/cancel`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ email }),
     });
     return response.json() as Promise<ApiResponse<any>>;
@@ -260,7 +296,18 @@ export const eventsApi = {
     });
     return response.json() as Promise<ApiResponse<any>>;
   },
+  cancelRegistration: async (registrationDbId: number) => {
+    const token = localStorage.getItem('userToken');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${API_BASE_URL}/events/registration/${registrationDbId}?by=member`, {
+      method: 'DELETE',
+      headers,
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
 };
+
 
 // Contact API
 export const contactApi = {
@@ -391,14 +438,34 @@ export const userApi = {
     return response.json() as Promise<ApiResponse<{ user: any }>>;
   },
 
-  getHistory: async (token: string) => {
-    const response = await fetch(`${API_BASE_URL}/user/history`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
+  getHistory: async (token?: string | null, email?: string | null) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const query = email ? `?email=${encodeURIComponent(email)}` : '';
+    const response = await fetch(`${API_BASE_URL}/user/history${query}`, { headers });
     return response.json() as Promise<ApiResponse<any> & {
       membership?: any;
       donations?: any[];
       eventRegistrations?: any[];
     }>;
   },
+
+  forgotPassword: async (payload: { email: string }) => {
+    const response = await fetch(`${API_BASE_URL}/user/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
+
+  resetPassword: async (payload: { email: string; otp: string; newPassword: string }) => {
+    const response = await fetch(`${API_BASE_URL}/user/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
 };
+

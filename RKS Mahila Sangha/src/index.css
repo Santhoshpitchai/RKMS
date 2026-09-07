@@ -15,6 +15,22 @@ body, h1, h2, h3, h4, h5, h6, p, span, button, a, div {
   word-break: break-word;
 }
 
+/* ── Mobile-first helpers ── */
+
+/* Remove 300ms tap delay on iOS / Android */
+a, button, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* Hide scrollbar but keep scroll functionality (for horizontal tab bars) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Completely Hide Google Translate Top Banner Frame, Gadget Popups & Spinners */
 #google_translate_element,
 .goog-te-banner-frame,

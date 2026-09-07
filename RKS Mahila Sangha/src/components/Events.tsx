@@ -3,7 +3,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { eventsApi, resolveBackendAssetUrl } from '../services/api';
-import { EventRegistrationModal } from './EventRegistrationModal';
+import { EventRegistrationModal, formatDateSafe } from './EventRegistrationModal';
 import { UserAuthModal } from './UserAuthModal';
 
 interface Event {
@@ -201,7 +201,7 @@ export function Events() {
             <span>Live Admin Sync Active • Real-time Event Updates</span>
           </div>
 
-          <div className="flex justify-center gap-3">
+          <div className="flex flex-wrap sm:flex-nowrap justify-center gap-2 sm:gap-3">
             <button
               onClick={() => setActiveTab('upcoming')}
               className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${
@@ -261,17 +261,26 @@ export function Events() {
                 <div key={event.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col justify-between">
                   <div>
                     {/* Image / Gallery */}
-                    {isPast && allImages.length > 0 ? (
+                    {allImages.length > 1 ? (
                       <div className="relative">
                         <EventGallery images={allImages} title={event.title} />
-                        <div className="absolute top-3 right-3 bg-gray-700 text-white text-xs px-3 py-1 rounded-full font-bold shadow-md">
-                          Completed
+                        <div className={`absolute top-3 right-3 text-white text-xs px-3 py-1 rounded-full font-bold shadow-md ${isPast ? 'bg-gray-700' : 'bg-[#0A6C87]'}`}>
+                          {isPast ? 'Completed' : 'Upcoming'}
                         </div>
-                        {allImages.length > 1 && (
-                          <div className="absolute top-3 left-3 bg-white/90 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+                        <div className="absolute top-3 left-3 flex gap-2">
+                          {isFree ? (
+                            <span className="bg-emerald-600 text-white text-[10px] px-2.5 py-0.5 rounded-full font-bold shadow uppercase">
+                              FREE ENTRY
+                            </span>
+                          ) : (
+                            <span className="bg-[#E5C100] text-[#0A6C87] text-[10px] px-2.5 py-0.5 rounded-full font-extrabold shadow">
+                              ₹{pricePerPerson} / Person
+                            </span>
+                          )}
+                          <span className="bg-white/90 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
                             📷 {allImages.length} Photos
-                          </div>
-                        )}
+                          </span>
+                        </div>
                       </div>
                     ) : (
                       <div className="relative h-52 bg-gray-100">
@@ -315,7 +324,7 @@ export function Events() {
                       <div className="space-y-2 pt-2 border-t text-xs text-gray-600">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-[#0A6C87] flex-shrink-0" />
-                          <span className="font-semibold">{new Date(event.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span className="font-semibold">{formatDateSafe(event.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         </div>
                         {event.time && (
                           <div className="flex items-center gap-2">

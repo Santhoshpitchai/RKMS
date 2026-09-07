@@ -52,26 +52,11 @@ const adminLogin = async (req, res) => {
             }
         }
 
-        // Auto-create initial master admin if 'admin' username is not found
-        if (!admin && isSupabaseConfigured() && (cleanUsername.toLowerCase() === 'admin' || cleanUsername.toLowerCase() === 'admin@rks.com') && (password === 'admin123' || password === 'admin')) {
-            try {
-                const hashedPassword = await bcrypt.hash('admin123', 10);
-                const { data: newSeed } = await supabase
-                    .from('admins')
-                    .insert([{ username: 'admin', password: hashedPassword }])
-                    .select()
-                    .maybeSingle();
-                if (newSeed) admin = newSeed;
-            } catch (seedErr) {
-                console.warn('Admin auto-seed error:', seedErr.message);
-            }
-        }
-
         if (!admin) {
             return res.status(401).json({ message: 'Invalid admin credentials' });
         }
 
-        // Verify password (supports both bcrypt hash AND direct plain text comparison for manually created DB rows)
+        // Verify password using secure bcrypt flow
         let isMatch = false;
         if (admin.password && (admin.password.startsWith('$2a$') || admin.password.startsWith('$2b$'))) {
             isMatch = await bcrypt.compare(password, admin.password);
@@ -84,11 +69,6 @@ const adminLogin = async (req, res) => {
                     await supabase.from('admins').update({ password: newHash }).eq('id', admin.id);
                 } catch (_) {}
             }
-        }
-
-        // Fallback for default master credentials
-        if (!isMatch && (cleanUsername.toLowerCase() === 'admin' && (password === 'admin123' || password === 'admin'))) {
-            isMatch = true;
         }
 
         if (!isMatch) {
@@ -535,6 +515,113 @@ const fetchAuditLogs = async (req, res) => {
     }
 };
 
+// In-memory OTP store for admin forgot password
+const adminOtpStore = new Map();
+
+/**
+ * Request OTP for Admin Forgot Password
+ */
+const requestAdminForgotPasswordOtp = async (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username) {
+            return res.status(400).json({ success: false, message: 'Admin username or email is required' });
+        }
+
+        const cleanUsername = username.trim().toLowerCase();
+        let adminEmail = cleanUsername.includes('@') ? cleanUsername : `${cleanUsername}@rksmahilasangha.org`;
+
+        let adminExists = false;
+        if (isSupabaseConfigured()) {
+            try {
+                const { data } = await supabase
+                    .from('admins')
+                    .select('*')
+                    .ilike('username', cleanUsername)
+                    .maybeSingle();
+
+                if (data) {
+                    adminExists = true;
+                    if (data.email) adminEmail = data.email;
+                }
+            } catch (e) {}
+        }
+
+        // Generate 6-digit OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        adminOtpStore.set(cleanUsername, {
+            otpCode,
+            expiresAt: Date.now() + 10 * 60 * 1000
+        });
+
+        // Send OTP email
+        await sendOtpEmail(adminEmail, cleanUsername, otpCode);
+
+        return res.status(200).json({
+            success: true,
+            message: 'A 6-digit OTP verification code has been sent to your registered admin email.'
+        });
+    } catch (error) {
+        console.error('Request admin forgot password OTP error:', error);
+        res.status(500).json({ success: false, message: 'Failed to send OTP code' });
+    }
+};
+
+/**
+ * Reset Admin Password using OTP
+ */
+const resetAdminPassword = async (req, res) => {
+    try {
+        const { username, otp, newPassword } = req.body;
+
+        if (!username || !otp || !newPassword) {
+            return res.status(400).json({ success: false, message: 'Username, 6-digit OTP code, and new password are required' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
+        }
+
+        const cleanUsername = username.trim().toLowerCase();
+        const providedOtp = String(otp).trim();
+        const otpData = adminOtpStore.get(cleanUsername);
+
+        if (!otpData || String(otpData.otpCode) !== providedOtp || otpData.expiresAt < Date.now()) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired 6-digit OTP code' });
+        }
+
+        // Hash new password using bcrypt
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        if (isSupabaseConfigured()) {
+            try {
+                await supabase
+                    .from('admins')
+                    .update({ password: hashedPassword })
+                    .ilike('username', cleanUsername);
+            } catch (dbErr) {
+                console.warn('Supabase admin password reset warning:', dbErr.message);
+            }
+        }
+
+        // MySQL fallback
+        try {
+            await pool.query('UPDATE admins SET password = ? WHERE LOWER(username) = LOWER(?)', [hashedPassword, cleanUsername]);
+        } catch (_) {}
+
+        // Clear memory OTP
+        adminOtpStore.delete(cleanUsername);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Admin password reset successfully! You can now log in with your new password.'
+        });
+    } catch (error) {
+        console.error('Reset admin password error:', error);
+        res.status(500).json({ success: false, message: 'Failed to reset admin password' });
+    }
+};
+
 module.exports = {
     adminLogin,
     getDashboard,
@@ -546,4 +633,7 @@ module.exports = {
     getAllAdmins,
     deleteAdmin,
     fetchAuditLogs,
+    requestAdminForgotPasswordOtp,
+    resetAdminPassword,
 };
+

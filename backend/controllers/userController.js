@@ -366,24 +366,44 @@ const loginUser = async (req, res) => {
  */
 const getUserProfile = async (req, res) => {
   try {
-    let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
+    let userPayload = req.user;
+
+    if (!userPayload) {
+      let token;
+      if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized. No token provided.' });
+      }
+
+      try {
+        userPayload = jwt.verify(token, secret);
+      } catch (err) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
+      }
     }
 
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'No token provided' });
+    // IDOR Check: If query email is provided, verify match with authenticated user's email
+    if (req.query.email && userPayload.email) {
+      const requestedEmail = String(req.query.email).trim().toLowerCase();
+      const authEmail = String(userPayload.email).trim().toLowerCase();
+      if (requestedEmail !== authEmail && userPayload.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Forbidden. You are not authorized to view another user\'s profile.' });
+      }
     }
-
-    const decoded = jwt.verify(token, secret);
 
     if (isSupabaseConfigured()) {
       try {
-        const { data: user } = await supabase
-          .from('users')
-          .select('id, name, email, phone, created_at')
-          .eq('id', decoded.id)
-          .maybeSingle();
+        let query = supabase.from('users').select('id, name, email, phone, created_at');
+        if (userPayload.id) {
+          query = query.eq('id', userPayload.id);
+        } else if (userPayload.email) {
+          query = query.eq('email', userPayload.email.trim().toLowerCase());
+        }
+
+        const { data: user } = await query.maybeSingle();
 
         if (user) {
           return res.status(200).json({ success: true, user });
@@ -406,17 +426,46 @@ const getUserProfile = async (req, res) => {
  */
 const getUserHistory = async (req, res) => {
   try {
-    let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
+    let userPayload = req.user;
+
+    if (!userPayload) {
+      let token;
+      if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized. Authentication required.' });
+      }
+
+      try {
+        userPayload = jwt.verify(token, secret);
+      } catch (err) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired authentication token.' });
+      }
     }
-    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
 
-    const decoded = jwt.verify(token, secret);
-    const email = decoded.email;
+    let targetEmail = userPayload.email;
 
-    if (!email) return res.status(400).json({ success: false, message: 'Invalid token payload' });
+    // IDOR Check: If email is supplied via query parameter, enforce equality with authenticated user token
+    if (req.query.email) {
+      const requestedEmail = String(req.query.email).trim().toLowerCase();
+      const authEmail = userPayload.email ? String(userPayload.email).trim().toLowerCase() : '';
 
+      if (userPayload.role === 'admin') {
+        targetEmail = requestedEmail;
+      } else if (requestedEmail !== authEmail) {
+        return res.status(403).json({ success: false, message: 'Forbidden. You cannot access another user\'s history.' });
+      } else {
+        targetEmail = authEmail;
+      }
+    }
+
+    if (!targetEmail) {
+      return res.status(400).json({ success: false, message: 'Email address could not be identified from token' });
+    }
+
+    const cleanEmail = String(targetEmail).trim().toLowerCase();
     let membershipData = null;
     let donationHistory = [];
     let eventHistory = [];
@@ -426,7 +475,7 @@ const getUserHistory = async (req, res) => {
       const { data: member } = await supabase
         .from('members')
         .select('*')
-        .eq('email', email)
+        .ilike('email', cleanEmail)
         .maybeSingle();
 
       if (member) {
@@ -443,10 +492,17 @@ const getUserHistory = async (req, res) => {
         membershipData = {
           memberId: member.membership_id,
           fullName: member.name,
+          guardianName: member.guardian_name,
+          gotraName: member.gotra_name,
           email: member.email,
           phone: member.phone,
+          dateOfBirth: member.date_of_birth,
+          profession: member.profession,
+          address: member.address,
           city: member.city,
           state: member.state,
+          pincode: member.pincode,
+          photoUrl: member.photo_url || member.photoUrl || null,
           registrationDate: member.created_at
             ? new Date(member.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
             : '-',
@@ -457,47 +513,140 @@ const getUserHistory = async (req, res) => {
         };
       }
 
-      // Donations
+      // Payments history (Donations + Membership payments)
+      const filterStr = member
+        ? `donor_email.ilike.${cleanEmail},member_id.eq.${member.id}`
+        : `donor_email.ilike.${cleanEmail}`;
+
       const { data: donations } = await supabase
         .from('payments')
         .select('*')
-        .eq('donor_email', email)
-        .eq('type', 'donation')
+        .or(filterStr)
         .order('created_at', { ascending: false });
 
+      donationHistory = (donations || []).map(d => ({
+        id: d.id,
+        type: d.type || 'donation',
+        amount: Number(d.amount),
+        paymentId: d.payment_id || d.order_id,
+        orderId: d.order_id,
+        purpose: d.purpose || (d.type === 'membership' ? 'Lifetime Membership Buying' : 'General Donation'),
+        status: d.status || 'completed',
+        date: d.created_at
+          ? new Date(d.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '-',
+      }));
+
+      // Event Registrations (ilike for case-insensitive email matching)
+      const { data: registrations } = await supabase
+        .from('event_registrations')
+        .select('*, events(title, date, location, price, is_free)')
+        .ilike('email', cleanEmail)
+        .order('created_at', { ascending: false });
+
+      eventHistory = (registrations || []).map(r => {
+        const eventPrice = Number(r.events?.price || 0);
+        const eventIsFree = Boolean(r.events?.is_free || eventPrice === 0);
+        const isPendingPayment = r.payment_status === 'pending' || (!eventIsFree && Number(r.payment_amount || 0) < (eventPrice * (r.number_of_attendees || 1)) && !r.payment_status?.includes('cancelled'));
+
+        return {
+          id: r.id,
+          eventId: r.event_id,
+          event_id: r.event_id,
+          registrationId: r.registration_id || `REG-${r.id}`,
+          eventTitle: r.events?.title || 'RKS Event',
+          eventDate: r.events?.date || null,
+          eventLocation: r.events?.location || null,
+          numberOfAttendees: r.number_of_attendees || 1,
+          guestNames: r.guest_names || '',
+          name: r.name,
+          email: r.email,
+          paymentAmount: Number(r.payment_amount || 0) || (eventPrice * (r.number_of_attendees || 1)),
+          paymentId: r.payment_id,
+          paymentStatus: isPendingPayment ? 'pending' : (r.payment_status || 'completed'),
+          isFree: eventIsFree && Number(r.payment_amount || 0) === 0,
+          eventPrice,
+          requiresPayment: isPendingPayment,
+          date: r.created_at
+            ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '-',
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        membership: membershipData,
+        donations: donationHistory,
+        eventRegistrations: eventHistory,
+      });
+    }
+
+    // MySQL Fallback
+    try {
+      const [members] = await pool.query('SELECT * FROM members WHERE LOWER(email) = ? LIMIT 1', [cleanEmail]);
+      if (members && members.length) {
+        const member = members[0];
+        const [mPayments] = await pool.query('SELECT * FROM payments WHERE member_id = ? AND type = "membership" ORDER BY created_at DESC LIMIT 1', [member.id]);
+        membershipData = {
+          memberId: member.membership_id,
+          fullName: member.name,
+          guardianName: member.guardian_name,
+          gotraName: member.gotra_name,
+          email: member.email,
+          phone: member.phone,
+          dateOfBirth: member.date_of_birth,
+          profession: member.profession,
+          address: member.address,
+          city: member.city,
+          state: member.state,
+          pincode: member.pincode,
+          photoUrl: member.photo_url || member.photoUrl || null,
+          registrationDate: member.created_at ? new Date(member.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
+          isActive: member.is_active,
+          paymentId: mPayments.length ? (mPayments[0].payment_id || mPayments[0].order_id) : null,
+          amountPaid: mPayments.length ? Number(mPayments[0].amount) : 1001,
+          paymentStatus: mPayments.length ? mPayments[0].status : 'completed',
+        };
+      }
+
+      const [donations] = await pool.query('SELECT * FROM payments WHERE LOWER(donor_email) = ? AND type = "donation" ORDER BY created_at DESC', [cleanEmail]);
       donationHistory = (donations || []).map(d => ({
         id: d.id,
         amount: Number(d.amount),
         paymentId: d.payment_id || d.order_id,
         purpose: d.purpose || 'General Donation',
         status: d.status,
-        date: d.created_at
-          ? new Date(d.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-          : '-',
+        date: d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
       }));
 
-      // Event Registrations
-      const { data: registrations } = await supabase
-        .from('event_registrations')
-        .select('*, events(title, date, location)')
-        .eq('email', email)
-        .order('created_at', { ascending: false });
-
-      eventHistory = (registrations || []).map(r => ({
+      const [regs] = await pool.query(
+        `SELECT r.*, e.title AS event_title, e.date AS event_date, e.location AS event_location
+         FROM event_registrations r
+         LEFT JOIN events e ON e.id = r.event_id
+         WHERE LOWER(r.email) = ?
+         ORDER BY r.created_at DESC`,
+        [cleanEmail]
+      );
+      eventHistory = (regs || []).map(r => ({
         id: r.id,
+        eventId: r.event_id,
+        event_id: r.event_id,
         registrationId: r.registration_id || `REG-${r.id}`,
-        eventTitle: r.events?.title || 'RKS Event',
-        eventDate: r.events?.date || null,
-        eventLocation: r.events?.location || null,
+        eventTitle: r.event_title || 'RKS Event',
+        eventDate: r.event_date || null,
+        eventLocation: r.event_location || null,
         numberOfAttendees: r.number_of_attendees || 1,
+        guestNames: r.guest_names || '',
+        name: r.name,
+        email: r.email,
         paymentAmount: Number(r.payment_amount || 0),
         paymentId: r.payment_id,
-        paymentStatus: r.payment_status,
+        paymentStatus: r.payment_status || 'completed',
         isFree: Number(r.payment_amount || 0) === 0,
-        date: r.created_at
-          ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-          : '-',
+        date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
       }));
+    } catch (dbErr) {
+      console.warn('MySQL history fetch warning:', dbErr.message);
     }
 
     return res.status(200).json({
@@ -512,6 +661,168 @@ const getUserHistory = async (req, res) => {
   }
 };
 
+/**
+ * Request OTP for User Forgot Password
+ */
+const requestUserForgotPasswordOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email address is required' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    let userExists = false;
+    let userName = cleanEmail.split('@')[0];
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('name')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (userData) {
+          userExists = true;
+          userName = userData.name || userName;
+        } else {
+          // Check members table as fallback
+          const { data: memberData } = await supabase
+            .from('members')
+            .select('name')
+            .ilike('email', cleanEmail)
+            .maybeSingle();
+
+          if (memberData) {
+            userExists = true;
+            userName = memberData.name || userName;
+          }
+        }
+      } catch (dbErr) {
+        console.warn('User lookup warning:', dbErr.message);
+      }
+    }
+
+    // Generate OTP
+    const otpCode = generate6DigitOtp();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    // Store in memory OTP store
+    otpStore.set(cleanEmail, {
+      otpCode,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      name: userName,
+      isForgotPassword: true
+    });
+
+    // Also attempt DB OTP save if available
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase
+          .from('users')
+          .update({ otp_code: otpCode, otp_expires_at: otpExpiresAt })
+          .eq('email', cleanEmail);
+      } catch (_) {}
+    }
+
+    // Send OTP email
+    await sendOtpEmail(cleanEmail, userName, otpCode);
+
+    return res.status(200).json({
+      success: true,
+      message: 'A 6-digit OTP code has been sent to your registered email address.'
+    });
+  } catch (error) {
+    console.error('Request forgot password OTP error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send OTP code' });
+  }
+};
+
+/**
+ * Reset User Password using OTP
+ */
+const resetUserPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Email, 6-digit OTP code, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const providedOtp = String(otp).trim();
+
+    // Check OTP
+    const memOtpData = otpStore.get(cleanEmail);
+    let isOtpValid = false;
+
+    if (memOtpData && String(memOtpData.otpCode) === providedOtp && memOtpData.expiresAt > Date.now()) {
+      isOtpValid = true;
+    } else if (isSupabaseConfigured()) {
+      try {
+        const { data: user } = await supabase
+          .from('users')
+          .select('otp_code, otp_expires_at')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (user && user.otp_code && String(user.otp_code) === providedOtp && new Date(user.otp_expires_at) > new Date()) {
+          isOtpValid = true;
+        }
+      } catch (_) {}
+    }
+
+    if (!isOtpValid) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired 6-digit OTP code' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update DB
+    if (isSupabaseConfigured()) {
+      const { error: updateErr } = await supabase
+        .from('users')
+        .update({
+          password: hashedPassword,
+          is_verified: true,
+          otp_code: null,
+          otp_expires_at: null
+        })
+        .eq('email', cleanEmail);
+
+      if (updateErr) {
+        console.error('Update user password DB error:', updateErr.message);
+        return res.status(500).json({ success: false, message: 'Failed to update user password in database' });
+      }
+
+      // Also update members table if password column exists in members
+      try {
+        await supabase
+          .from('members')
+          .update({ password: hashedPassword })
+          .ilike('email', cleanEmail);
+      } catch (_) {}
+    }
+
+    // Clear memory OTP
+    otpStore.delete(cleanEmail);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successfully! You can now log in with your new password.'
+    });
+  } catch (error) {
+    console.error('Reset user password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reset password' });
+  }
+};
+
 module.exports = {
   registerUser,
   verifyUserOtp,
@@ -519,4 +830,7 @@ module.exports = {
   loginUser,
   getUserProfile,
   getUserHistory,
+  requestUserForgotPasswordOtp,
+  resetUserPassword,
 };
+

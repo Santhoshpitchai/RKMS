@@ -40,8 +40,8 @@ const upload = multer({
 // Middleware to handle single photo upload
 const uploadMemberPhoto = upload.single('photo');
 
-// Middleware to handle multi-image upload
-const uploadEventImages = upload.array('eventImages', 4);
+// Middleware to handle multi-image upload (up to 10 photos per event)
+const uploadEventImages = upload.array('eventImages', 10);
 
 module.exports = {
     uploadMemberPhoto,

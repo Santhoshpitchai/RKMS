@@ -175,6 +175,17 @@ export const adminApi = {
     return response.json() as Promise<ApiResponse<any>>;
   },
 
+  deleteEventRegistration: async (token: string, registrationDbId: number, isPermanent: boolean = false) => {
+    const query = isPermanent ? '?by=admin&action=delete' : '?by=admin';
+    const response = await fetch(`${API_BASE_URL}/events/registration/${registrationDbId}${query}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
+
   getSettings: async (token: string) => {
     const response = await fetch(`${API_BASE_URL}/settings`, {
       headers: {
@@ -195,4 +206,23 @@ export const adminApi = {
     });
     return response.json() as Promise<ApiResponse<any>>;
   },
+
+  forgotPassword: async (username: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username }),
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
+
+  resetPasswordOtp: async (payload: { username: string; otp: string; newPassword: string }) => {
+    const response = await fetch(`${API_BASE_URL}/admin/reset-password-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
 };
+
