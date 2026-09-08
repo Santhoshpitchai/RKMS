@@ -12,7 +12,7 @@ export function AdminDashboard() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  const [stats, setStats] = useState({ totalMembers: 0, totalRevenue: 0, totalEvents: 0, totalPayments: 0 });
+  const [stats, setStats] = useState({ totalMembers: 0, activeMembers: 0, cancelledMembers: 0, totalRevenue: 0, totalEvents: 0, totalPayments: 0 });
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -59,7 +59,7 @@ export function AdminDashboard() {
       iconGradient: 'from-sky-500 to-cyan-500',
       border: isLight ? 'border-sky-200' : 'border-sky-500/30',
       glow: isLight ? '' : 'shadow-sky-950/50',
-      trend: 'Active lifetime members',
+      trend: `${stats.activeMembers || stats.totalMembers} Active · ${stats.cancelledMembers || 0} Cancelled`,
       trendUp: true,
     },
     {

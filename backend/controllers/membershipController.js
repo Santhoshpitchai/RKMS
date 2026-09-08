@@ -41,7 +41,7 @@ const createMembershipOrder = async (req, res) => {
     const cleanEmail = email ? email.trim().toLowerCase() : '';
     const cleanPhone = phone ? phone.trim() : '';
 
-    // Check if membership is already active for this email or phone
+    // Check if membership is already ACTIVE for this email or phone
     if (isSupabaseConfigured() && (cleanEmail || cleanPhone)) {
       try {
         const { data: existingMember } = await supabase
@@ -50,7 +50,9 @@ const createMembershipOrder = async (req, res) => {
           .or(`email.eq.${cleanEmail},phone.eq.${cleanPhone}`)
           .maybeSingle();
 
-        if (existingMember && (existingMember.payment_status === 'COMPLETED' || existingMember.membership_id)) {
+        // Only block if membership is currently active — allow re-purchase if cancelled
+        const isActive = existingMember && (existingMember.is_active === true || existingMember.is_active === 1);
+        if (isActive && existingMember.membership_id) {
           return res.status(200).json({
             success: false,
             alreadyMember: true,
@@ -62,6 +64,25 @@ const createMembershipOrder = async (req, res) => {
       } catch (checkErr) {
         console.warn('Pre-payment membership check warning:', checkErr.message);
       }
+    }
+
+    // MySQL fallback check — only block active memberships
+    if (!isSupabaseConfigured() && (cleanEmail || cleanPhone)) {
+      try {
+        const [rows] = await pool.query(
+          'SELECT * FROM members WHERE (LOWER(email) = ? OR phone = ?) AND is_active = 1 LIMIT 1',
+          [cleanEmail, cleanPhone]
+        );
+        const existingMember = rows[0];
+        if (existingMember && existingMember.membership_id) {
+          return res.status(200).json({
+            success: false,
+            alreadyMember: true,
+            membershipId: existingMember.membership_id,
+            message: `Your Lifetime Membership is already active (Member ID: ${existingMember.membership_id})! No further payment is needed. Please view your card in the Member Dashboard.`
+          });
+        }
+      } catch (_) {}
     }
 
     const settings = await getSettings();
@@ -411,6 +432,61 @@ const getMembershipStatus = async (req, res) => {
     }
 
     let email = req.query.email;
+    const memberId = req.query.memberId || req.query.id;
+
+    // If memberId is provided (QR code scan), look up by membership_id directly — no auth required for public verification
+    if (memberId && !email) {
+      const cleanMemberId = String(memberId).trim();
+      let memberByIdData = null;
+
+      if (isSupabaseConfigured()) {
+        const { data } = await supabase
+          .from('members')
+          .select('*')
+          .ilike('membership_id', cleanMemberId)
+          .maybeSingle();
+        memberByIdData = data;
+      }
+
+      if (!memberByIdData) {
+        try {
+          const [rows] = await pool.query('SELECT * FROM members WHERE LOWER(membership_id) = LOWER(?) LIMIT 1', [cleanMemberId]);
+          if (rows && rows.length) memberByIdData = rows[0];
+        } catch (_) {}
+      }
+
+      if (memberByIdData) {
+        const isMemberActive = memberByIdData.is_active === 1 || memberByIdData.is_active === true;
+        return res.status(200).json({
+          success: true,
+          exists: true,
+          member: {
+            memberId: memberByIdData.membership_id,
+            fullName: memberByIdData.name || '',
+            firstName: memberByIdData.first_name || (memberByIdData.name ? memberByIdData.name.split(' ')[0] : ''),
+            lastName: memberByIdData.last_name || (memberByIdData.name ? memberByIdData.name.split(' ').slice(1).join(' ') : ''),
+            guardianName: memberByIdData.guardian_name || '',
+            gotraName: memberByIdData.gotra_name || '',
+            email: memberByIdData.email,
+            phone: memberByIdData.phone,
+            dateOfBirth: memberByIdData.date_of_birth,
+            profession: memberByIdData.profession || '',
+            address: memberByIdData.address || '',
+            city: memberByIdData.city || '',
+            state: memberByIdData.state || 'Karnataka',
+            pincode: memberByIdData.pincode || '',
+            bloodGroup: memberByIdData.blood_group || '',
+            photoUrl: memberByIdData.photo_url || null,
+            isActive: isMemberActive,
+            status: isMemberActive ? 'ACTIVE' : 'CANCELLED',
+            registrationDate: memberByIdData.created_at ? String(memberByIdData.created_at).split('T')[0] : new Date().toISOString().split('T')[0]
+          },
+          payments: []
+        });
+      }
+
+      return res.status(200).json({ success: false, exists: false, message: 'Member not found' });
+    }
 
     if (email && userPayload && userPayload.email) {
       const requestedEmail = String(email).trim().toLowerCase();
@@ -503,6 +579,7 @@ const getMembershipStatus = async (req, res) => {
     }
 
     if (member) {
+      const isMemberActive = member.is_active === 1 || member.is_active === true;
       return res.status(200).json({
         success: true,
         exists: true,
@@ -522,6 +599,8 @@ const getMembershipStatus = async (req, res) => {
           state: member.state || 'Karnataka',
           pincode: member.pincode || '',
           photoUrl: member.photo_url || member.photoUrl || null,
+          isActive: isMemberActive,
+          status: isMemberActive ? 'ACTIVE' : 'CANCELLED',
           registrationDate: member.created_at ? String(member.created_at).split('T')[0] : new Date().toISOString().split('T')[0]
         },
         payments
@@ -710,19 +789,24 @@ const cancelMembership = async (req, res) => {
     if (isSupabaseConfigured()) {
       await supabase
         .from('members')
-        .delete()
-        .eq('email', cleanEmail);
+        .update({ is_active: false })
+        .ilike('email', cleanEmail);
     }
 
     try {
-      await pool.query('DELETE FROM members WHERE email = ?', [cleanEmail]);
+      await pool.query('UPDATE members SET is_active = 0 WHERE LOWER(email) = ?', [cleanEmail]);
     } catch (mysqlErr) {
       console.warn('MySQL cancel membership warning:', mysqlErr.message);
     }
 
+    try {
+      const { logAdminAction } = require('../services/auditService');
+      await logAdminAction(cleanEmail, 'MEMBER_CANCELLED', 'members', `Membership cancelled by member (${cleanEmail})`, req.ip || '127.0.0.1');
+    } catch (_) {}
+
     return res.status(200).json({
       success: true,
-      message: 'Membership cancelled and deleted successfully from database'
+      message: 'Membership cancelled successfully'
     });
   } catch (error) {
     console.error('Cancel membership error:', error);

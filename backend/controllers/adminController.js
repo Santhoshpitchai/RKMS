@@ -43,10 +43,10 @@ const adminLogin = async (req, res) => {
         if (!admin && cleanUsername) {
             try {
                 const [admins] = await pool.query(
-                    'SELECT id, username, password FROM admins WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1',
-                    [cleanUsername, cleanUsername]
+                    'SELECT id, username, password FROM admins WHERE LOWER(username) = LOWER(?) LIMIT 1',
+                    [cleanUsername]
                 );
-                admin = admins[0];
+                if (admins && admins.length) admin = admins[0];
             } catch (mysqlErr) {
                 console.warn('MySQL login check warning:', mysqlErr.message);
             }
@@ -97,6 +97,8 @@ const getDashboard = async (req, res) => {
     try {
         if (isSupabaseConfigured()) {
             const { count: memberTotal } = await supabase.from('members').select('*', { count: 'exact', head: true });
+            const { count: activeTotal } = await supabase.from('members').select('*', { count: 'exact', head: true }).eq('is_active', true);
+            const { count: cancelledTotal } = await supabase.from('members').select('*', { count: 'exact', head: true }).eq('is_active', false);
             const { count: eventTotal } = await supabase.from('events').select('*', { count: 'exact', head: true });
             const { data: paymentsData } = await supabase.from('payments').select('amount, status');
 
@@ -120,6 +122,8 @@ const getDashboard = async (req, res) => {
                 success: true,
                 stats: {
                     totalMembers: memberTotal || 0,
+                    activeMembers: activeTotal || 0,
+                    cancelledMembers: cancelledTotal || 0,
                     totalPayments: completedPayments.length,
                     totalRevenue,
                     totalEvents: eventTotal || 0
@@ -131,6 +135,8 @@ const getDashboard = async (req, res) => {
 
         // MySQL Fallback
         const [[memberCount]] = await pool.query('SELECT COUNT(*) AS total FROM members');
+        const [[activeCount]] = await pool.query('SELECT COUNT(*) AS total FROM members WHERE is_active = 1');
+        const [[cancelledCount]] = await pool.query('SELECT COUNT(*) AS total FROM members WHERE is_active = 0');
         const [[paymentCount]] = await pool.query("SELECT COUNT(*) AS total FROM payments WHERE status = 'completed'");
         const [[revenue]] = await pool.query("SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'completed'");
         const [[eventCount]] = await pool.query('SELECT COUNT(*) AS total FROM events');
@@ -138,7 +144,7 @@ const getDashboard = async (req, res) => {
         const [recentMembers] = await pool.query(
             `SELECT id, name, guardian_name, gotra_name, email, phone, membership_id, 
                     educational_qualification, profession, marital_status, blood_group, 
-                    city, state, created_at
+                    city, state, created_at, is_active
              FROM members
              ORDER BY created_at DESC
              LIMIT 5`
@@ -157,6 +163,8 @@ const getDashboard = async (req, res) => {
             success: true,
             stats: {
                 totalMembers: memberCount?.total || 0,
+                activeMembers: activeCount?.total || 0,
+                cancelledMembers: cancelledCount?.total || 0,
                 totalPayments: paymentCount?.total || 0,
                 totalRevenue: Number(revenue?.total || 0),
                 totalEvents: eventCount?.total || 0
@@ -338,31 +346,96 @@ const getEventRegistrations = async (req, res) => {
     }
 };
 
-// Register new admin account in Supabase / DB
+// In-memory store for new admin creation OTPs
+const newAdminOtpStore = new Map();
+
+/**
+ * Request OTP for creating a new admin account
+ */
+const requestNewAdminOtp = async (req, res) => {
+    try {
+        const { username, email } = req.body;
+        if (!username || !email) {
+            return res.status(400).json({ success: false, message: 'Username and email are required to send verification OTP' });
+        }
+
+        const cleanUsername = username.trim();
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Check if admin with this username already exists
+        if (isSupabaseConfigured()) {
+            const { data: existingAdmin } = await supabase
+                .from('admins')
+                .select('id')
+                .ilike('username', cleanUsername)
+                .maybeSingle();
+            if (existingAdmin) {
+                return res.status(400).json({ success: false, message: `Admin account with username "${cleanUsername}" already exists.` });
+            }
+        }
+
+        try {
+            const [existingRows] = await pool.query('SELECT id FROM admins WHERE LOWER(username) = LOWER(?) LIMIT 1', [cleanUsername]);
+            if (existingRows && existingRows.length > 0) {
+                return res.status(400).json({ success: false, message: `Admin account with username "${cleanUsername}" already exists.` });
+            }
+        } catch (_) {}
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        newAdminOtpStore.set(cleanEmail, {
+            username: cleanUsername,
+            email: cleanEmail,
+            otpCode,
+            expiresAt: Date.now() + 10 * 60 * 1000
+        });
+
+        await sendOtpEmail(cleanEmail, cleanUsername, otpCode);
+
+        return res.status(200).json({
+            success: true,
+            message: `Verification OTP has been sent to ${cleanEmail}`
+        });
+    } catch (error) {
+        console.error('Request new admin OTP error:', error);
+        res.status(500).json({ success: false, message: 'Failed to send OTP verification email' });
+    }
+};
+
+// Register new admin account after verifying OTP
 const registerAdmin = async (req, res) => {
     try {
-        const { username, password } = req.body;
-        if (!username || !password) {
-            return res.status(400).json({ success: false, message: 'Username and password are required' });
+        const { username, email, password, otp } = req.body;
+        if (!username || !email || !password || !otp) {
+            return res.status(400).json({ success: false, message: 'Username, email, password, and 6-digit OTP code are required' });
+        }
+
+        const cleanUsername = username.trim();
+        const cleanEmail = email.trim().toLowerCase();
+        const providedOtp = String(otp).trim();
+
+        const otpData = newAdminOtpStore.get(cleanEmail);
+        if (!otpData || String(otpData.otpCode) !== providedOtp || otpData.expiresAt < Date.now()) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired 6-digit verification OTP code' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        let savedInDb = false;
+        let lastError = null;
 
         if (isSupabaseConfigured()) {
             try {
-                // Try insert first
+                // Insert username and password (columns guaranteed to exist in schema)
                 let { data, error } = await supabase
                     .from('admins')
-                    .insert([{ username, password: hashedPassword }])
+                    .insert([{ username: cleanUsername, password: hashedPassword }])
                     .select()
                     .maybeSingle();
 
-                // If user already exists, update existing password
                 if (error && (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique'))) {
                     const updateRes = await supabase
                         .from('admins')
                         .update({ password: hashedPassword })
-                        .eq('username', username)
+                        .eq('username', cleanUsername)
                         .select()
                         .maybeSingle();
                     data = updateRes.data;
@@ -370,32 +443,46 @@ const registerAdmin = async (req, res) => {
                 }
 
                 if (!error) {
+                    savedInDb = true;
+                    newAdminOtpStore.delete(cleanEmail);
                     return res.status(201).json({
                         success: true,
-                        message: 'Admin account created/updated successfully in Supabase DB',
-                        admin: data ? { id: data.id, username: data.username } : { username }
+                        message: 'Admin account verified & created successfully in Supabase DB',
+                        admin: data ? { id: data.id, username: data.username } : { username: cleanUsername }
                     });
                 } else {
                     console.warn('Supabase admin register warning:', error.message);
+                    lastError = error.message;
                 }
             } catch (supaErr) {
                 console.warn('Supabase register error:', supaErr.message);
+                lastError = supaErr.message;
             }
         }
 
-        // MySQL / In-memory Fallback so action never fails for user
+        // MySQL Fallback
         try {
-            await pool.query(
+            const [result] = await pool.query(
                 'INSERT INTO admins (username, password) VALUES (?, ?) ON DUPLICATE KEY UPDATE password = ?',
-                [username, hashedPassword, hashedPassword]
+                [cleanUsername, hashedPassword, hashedPassword]
             );
+            if (result) savedInDb = true;
         } catch (mysqlErr) {
             console.warn('MySQL fallback warning:', mysqlErr.message);
+            if (!lastError) lastError = mysqlErr.message;
         }
 
-        res.status(201).json({
-            success: true,
-            message: 'Admin account registered successfully!'
+        if (savedInDb) {
+            newAdminOtpStore.delete(cleanEmail);
+            return res.status(201).json({
+                success: true,
+                message: 'Admin account verified & registered successfully!'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: `Failed to create admin account in database: ${lastError || 'Database write error'}`
         });
     } catch (error) {
         console.error('Register admin error:', error);
@@ -622,6 +709,47 @@ const resetAdminPassword = async (req, res) => {
     }
 };
 
+/**
+ * Toggle or update member active / cancelled status
+ */
+const toggleMemberStatus = async (req, res) => {
+    try {
+        const { memberId, isActive } = req.body;
+        if (!memberId) {
+            return res.status(400).json({ success: false, message: 'Member ID is required' });
+        }
+
+        const activeBool = Boolean(isActive);
+
+        if (isSupabaseConfigured()) {
+            await supabase
+                .from('members')
+                .update({ is_active: activeBool })
+                .eq('id', memberId);
+        }
+
+        try {
+            await pool.query('UPDATE members SET is_active = ? WHERE id = ?', [activeBool ? 1 : 0, memberId]);
+        } catch (_) {}
+
+        await logAdminAction(
+            req.user?.username || 'admin',
+            activeBool ? 'MEMBER_REACTIVATED' : 'MEMBER_CANCELLED',
+            'members',
+            `Member status updated to ${activeBool ? 'Active' : 'Cancelled'} (Member ID: ${memberId})`,
+            req.ip || '127.0.0.1'
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: `Membership status updated to ${activeBool ? 'Active' : 'Cancelled'}`
+        });
+    } catch (error) {
+        console.error('Toggle member status error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update member status' });
+    }
+};
+
 module.exports = {
     adminLogin,
     getDashboard,
@@ -635,5 +763,7 @@ module.exports = {
     fetchAuditLogs,
     requestAdminForgotPasswordOtp,
     resetAdminPassword,
+    requestNewAdminOtp,
+    toggleMemberStatus,
 };
 

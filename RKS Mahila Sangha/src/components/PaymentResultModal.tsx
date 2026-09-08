@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Download, RotateCcw, X, Phone, Mail, MapPin, Hash, ClipboardCopy } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -339,8 +340,8 @@ export function PaymentResultModal({ success, failure, onClose, onRetry, onDownl
                       (() => {
                         const token = localStorage.getItem('userToken') || localStorage.getItem('adminToken') || '';
                         const base = success.receiptDownloadUrl && !success.receiptDownloadUrl.includes('/uploads/')
-                          ? (success.receiptDownloadUrl.startsWith('http') ? success.receiptDownloadUrl : `http://localhost:5001/api${success.receiptDownloadUrl.startsWith('/') ? '' : '/'}${success.receiptDownloadUrl}`)
-                          : `http://localhost:5001/api/donation/receipt/${success.paymentId || success.orderId}`;
+                          ? (success.receiptDownloadUrl.startsWith('http') ? success.receiptDownloadUrl : `${API_BASE_URL}${success.receiptDownloadUrl.startsWith('/') ? '' : '/'}${success.receiptDownloadUrl}`)
+                          : `${API_BASE_URL}/donation/receipt/${success.paymentId || success.orderId}`;
                         return base.includes('token=') ? base : `${base}${base.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
                       })()
                     }

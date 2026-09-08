@@ -1,6 +1,6 @@
 import { AdminLayout } from './AdminLayout';
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Download, Calendar, RefreshCw, Users, ShieldCheck, Sparkles, User } from 'lucide-react';
+import { Search, Download, Calendar, RefreshCw, Users, ShieldCheck, Sparkles, Ban, Filter, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi, resolveBackendAssetUrl } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -25,7 +25,7 @@ interface Member {
   aadharNumber: string;
   photoUrl: string;
   joinDate: string;
-  status: 'Active' | 'Inactive';
+  status: 'Active' | 'Cancelled';
 }
 
 const MEMBERS_FETCH_LIMIT = 2000;
@@ -58,6 +58,7 @@ export function MemberManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'cancelled'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -72,28 +73,31 @@ export function MemberManagement() {
     try {
       const response = await adminApi.getMembers(token, 1, MEMBERS_FETCH_LIMIT);
       if (response.success && Array.isArray(response.members)) {
-        const rows: Member[] = response.members.map((m: Record<string, unknown>) => ({
-          id: String(m.id),
-          name: String(m.name ?? ''),
-          guardianName: String(m.guardian_name ?? ''),
-          gotraName: String(m.gotra_name ?? ''),
-          email: String(m.email ?? ''),
-          phone: String(m.phone ?? ''),
-          membershipId: String(m.membership_id ?? ''),
-          dateOfBirth: String(m.date_of_birth ?? ''),
-          educationalQualification: String(m.educational_qualification ?? ''),
-          profession: String(m.profession ?? ''),
-          maritalStatus: String(m.marital_status ?? ''),
-          bloodGroup: String(m.blood_group ?? ''),
-          address: String(m.address ?? ''),
-          city: String(m.city ?? ''),
-          state: String(m.state ?? ''),
-          pincode: String(m.pincode ?? ''),
-          aadharNumber: String(m.aadhar_number ?? ''),
-          photoUrl: String(m.photo_url ?? ''),
-          joinDate: String(m.created_at ?? ''),
-          status: m.is_active === 1 || m.is_active === true ? 'Active' : 'Inactive',
-        }));
+        const rows: Member[] = response.members.map((m: Record<string, unknown>) => {
+          const isActive = m.is_active === 1 || m.is_active === true || m.is_active === '1' || m.is_active === 'true';
+          return {
+            id: String(m.id),
+            name: String(m.name ?? ''),
+            guardianName: String(m.guardian_name ?? ''),
+            gotraName: String(m.gotra_name ?? ''),
+            email: String(m.email ?? ''),
+            phone: String(m.phone ?? ''),
+            membershipId: String(m.membership_id ?? ''),
+            dateOfBirth: String(m.date_of_birth ?? ''),
+            educationalQualification: String(m.educational_qualification ?? ''),
+            profession: String(m.profession ?? ''),
+            maritalStatus: String(m.marital_status ?? ''),
+            bloodGroup: String(m.blood_group ?? ''),
+            address: String(m.address ?? ''),
+            city: String(m.city ?? ''),
+            state: String(m.state ?? ''),
+            pincode: String(m.pincode ?? ''),
+            aadharNumber: String(m.aadhar_number ?? ''),
+            photoUrl: String(m.photo_url ?? ''),
+            joinDate: String(m.created_at ?? ''),
+            status: isActive ? 'Active' : 'Cancelled',
+          };
+        });
         setMembers(rows);
       } else {
         toast.error('Failed to load members');
@@ -112,6 +116,29 @@ export function MemberManagement() {
     fetchMembers();
   }, [fetchMembers, refreshKey]);
 
+  const handleToggleMemberStatus = async (memberId: string, currentIsActive: boolean) => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) return;
+
+    const actionText = currentIsActive ? 'cancel' : 'reactivate';
+    if (!window.confirm(`Are you sure you want to ${actionText} this member's status?`)) return;
+
+    try {
+      const res = await adminApi.updateMemberStatus(token, memberId, !currentIsActive);
+      if (res.success) {
+        toast.success(`Member status updated to ${!currentIsActive ? 'Active' : 'Cancelled'}`);
+        setRefreshKey((k) => k + 1);
+      } else {
+        toast.error(res.message || 'Failed to update member status');
+      }
+    } catch (err) {
+      toast.error('Failed to update member status');
+    }
+  };
+
+  const activeCount = members.filter((m) => m.status === 'Active').length;
+  const cancelledCount = members.filter((m) => m.status === 'Cancelled').length;
+
   const filteredMembers = members.filter((member) => {
     const q = searchTerm.toLowerCase().trim();
     const matchesSearch =
@@ -127,7 +154,12 @@ export function MemberManagement() {
     const matchesStartDate = !startDate || (validDate && memberDate >= new Date(startDate));
     const matchesEndDate = !endDate || (validDate && memberDate <= new Date(`${endDate}T23:59:59`));
 
-    return matchesSearch && matchesStartDate && matchesEndDate;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && member.status === 'Active') ||
+      (statusFilter === 'cancelled' && member.status === 'Cancelled');
+
+    return matchesSearch && matchesStartDate && matchesEndDate && matchesStatus;
   });
 
   const handleExportCSV = () => {
@@ -191,8 +223,21 @@ export function MemberManagement() {
               Member Directory
             </h1>
             <p className={`text-xs sm:text-sm mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-              View, search, filter, and export official community members.
+              View, filter, manage status, and export official community members.
             </p>
+            
+            {/* Real-time Status Counter Chips */}
+            <div className="flex items-center gap-2 mt-3 text-xs font-semibold">
+              <span className="px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-600 border border-cyan-500/20">
+                Total: <b>{members.length}</b>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> Active: <b>{activeCount}</b>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 flex items-center gap-1">
+                <Ban className="w-3.5 h-3.5 text-red-500" /> Cancelled: <b>{cancelledCount}</b>
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -227,7 +272,7 @@ export function MemberManagement() {
         <div className={`p-5 rounded-2xl border shadow-xl transition-colors ${
           isLight ? 'bg-white border-slate-200' : 'bg-slate-950/80 border-slate-800'
         }`}>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
@@ -240,6 +285,22 @@ export function MemberManagement() {
                 }`}
               />
             </div>
+
+            <div className="relative">
+              <Filter className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className={`w-full text-xs pl-9 pr-3 py-2.5 rounded-xl focus:outline-none focus:border-cyan-500 border font-semibold ${
+                  isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-200'
+                }`}
+              >
+                <option value="all">All Members ({members.length})</option>
+                <option value="active">Active Members Only ({activeCount})</option>
+                <option value="cancelled">Cancelled Members Only ({cancelledCount})</option>
+              </select>
+            </div>
+
             <div className="relative">
               <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
@@ -251,6 +312,7 @@ export function MemberManagement() {
                 }`}
               />
             </div>
+
             <div className="relative">
               <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
@@ -272,12 +334,14 @@ export function MemberManagement() {
           <div className={`p-4 border-b flex justify-between items-center ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
             <h3 className={`font-bold text-sm flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
               <Users className="w-4 h-4 text-cyan-500" />
-              Total Members ({filteredMembers.length})
+              Showing {filteredMembers.length} Members
             </h3>
           </div>
 
           {isLoading ? (
             <div className="p-12 text-center text-slate-400 text-xs">Loading members directory...</div>
+          ) : filteredMembers.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs">No members found matching filter criteria.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className={`w-full text-left text-xs ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
@@ -293,6 +357,7 @@ export function MemberManagement() {
                     <th className="py-3 px-4">Profession</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Joined</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-slate-800/60'}`}>
@@ -323,12 +388,31 @@ export function MemberManagement() {
                       <td className={`py-3 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.city || '-'}</td>
                       <td className={`py-3 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.profession || '-'}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 inline-flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" /> Active
-                        </span>
+                        {member.status === 'Active' ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 inline-flex items-center gap-1 shadow-sm">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Active
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 inline-flex items-center gap-1 shadow-sm">
+                            <Ban className="w-3.5 h-3.5 text-red-500" /> Cancelled
+                          </span>
+                        )}
                       </td>
                       <td className={`py-3 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                         {member.joinDate ? new Date(member.joinDate).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => handleToggleMemberStatus(member.id, member.status === 'Active')}
+                          title={member.status === 'Active' ? 'Cancel Member' : 'Reactivate Member'}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border shadow-sm ${
+                            member.status === 'Active'
+                              ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/30'
+                              : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border-emerald-500/30'
+                          }`}
+                        >
+                          {member.status === 'Active' ? 'Cancel' : 'Reactivate'}
+                        </button>
                       </td>
                     </tr>
                   ))}

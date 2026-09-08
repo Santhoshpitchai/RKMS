@@ -1,7 +1,7 @@
 export const API_BASE_URL = 
   typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:5001/api'
-    : (import.meta.env.VITE_API_URL || 'http://localhost:5001/api');
+    : (import.meta.env.VITE_API_URL || '/api');
 
 export const getApiOrigin = (): string => API_BASE_URL.replace(/\/api\/?$/, '');
 
@@ -54,7 +54,19 @@ export const adminApi = {
     }>>;
   },
 
-  register: async (token: string, credentials: { username: string; password: string }) => {
+  requestNewAdminOtp: async (token: string, payload: { username: string; email: string }) => {
+    const response = await fetch(`${API_BASE_URL}/admin/request-new-admin-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
+
+  register: async (token: string, credentials: { username: string; email: string; password: string; otp: string }) => {
     const response = await fetch(`${API_BASE_URL}/admin/register`, {
       method: 'POST',
       headers: {
@@ -111,6 +123,18 @@ export const adminApi = {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
+    });
+    return response.json() as Promise<ApiResponse<any>>;
+  },
+
+  updateMemberStatus: async (token: string, memberId: string | number, isActive: boolean) => {
+    const response = await fetch(`${API_BASE_URL}/admin/members/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ memberId, isActive }),
     });
     return response.json() as Promise<ApiResponse<any>>;
   },

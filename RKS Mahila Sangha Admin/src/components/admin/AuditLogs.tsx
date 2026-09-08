@@ -4,7 +4,7 @@ import { ShieldCheck, Search, Clock, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+import { API_BASE_URL } from '../../services/api';
 
 interface AuditLog {
   id?: number | string;

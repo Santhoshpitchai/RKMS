@@ -100,6 +100,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
   };
   
   const [membership, setMembership] = useState<any | null>(null);
+  const isCancelledMem = Boolean(membership && (membership.isActive === false || membership.status === 'CANCELLED' || membership.is_active === false || membership.is_active === 0));
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [payments, setPayments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -601,6 +602,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
     city?: string;
     registrationDate?: string;
     photoUrl?: string;
+    isCancelled?: boolean;
   }, qrDataUrl?: string) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -614,6 +616,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
     const memberCity = member.city || 'Bengaluru';
     const regDate = member.registrationDate || 'Active';
     const memberPhotoUrl = member.photoUrl;
+    const isCancelled = Boolean(member.isCancelled);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -663,6 +666,31 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
             letter-spacing: 0.5px;
             white-space: nowrap;
           }
+          .org-badge.cancelled {
+            background: #ef4444 !important;
+            color: #ffffff !important;
+          }
+          .cancelled-seal {
+            position: absolute;
+            top: 48%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-18deg);
+            border: 4px solid #ef4444;
+            color: #ef4444;
+            font-size: 32px;
+            font-weight: 900;
+            letter-spacing: 6px;
+            padding: 8px 24px;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.88);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            text-transform: uppercase;
+            white-space: nowrap;
+            z-index: 30;
+            pointer-events: none;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
 
           /* ── CARD ── */
           .card-wrap { display: flex; justify-content: center; }
@@ -678,6 +706,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
             box-shadow: 0 8px 24px rgba(10,108,135,0.25);
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+          }
+          .id-card.cancelled-card {
+            border-color: #ef4444 !important;
           }
           .id-card::before {
             content: '';
@@ -716,6 +747,10 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
             border-radius: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+          }
+          .lifetime-badge.cancelled {
+            background: #ef4444 !important;
+            color: #ffffff !important;
           }
           .card-body { display: flex; gap: 14px; align-items: center; }
           .photo-slot {
@@ -817,12 +852,16 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
               <div class="org-kn">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ</div>
               <div class="org-tag">Official Member Identity Document</div>
             </div>
-            <div class="org-badge">✓ Verified Lifetime Member</div>
+            ${isCancelled 
+              ? `<div class="org-badge cancelled">✕ MEMBERSHIP CANCELLED</div>`
+              : `<div class="org-badge">✓ Verified Lifetime Member</div>`
+            }
           </div>
 
           <!-- MEMBER ID CARD -->
           <div class="card-wrap">
-            <div class="id-card">
+            <div class="id-card ${isCancelled ? 'cancelled-card' : ''}">
+              ${isCancelled ? `<div class="cancelled-seal">CANCELLED</div>` : ''}
               <div class="card-header">
                 <div class="card-header-left">
                   <img src="${logo}" class="card-logo" />
@@ -831,7 +870,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                     <div class="card-subtitle">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ &nbsp;•&nbsp; Official ID Card</div>
                   </div>
                 </div>
-                <span class="lifetime-badge">LIFETIME MEMBER</span>
+                <span class="lifetime-badge ${isCancelled ? 'cancelled' : ''}">
+                  ${isCancelled ? 'CANCELLED' : 'LIFETIME MEMBER'}
+                </span>
               </div>
 
               <div class="card-body">
@@ -847,7 +888,13 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                   <div class="card-row"><span class="card-lbl">PHONE:</span><span>${memberPhone}</span></div>
                   <div class="card-row"><span class="card-lbl">CITY:</span><span>${memberCity}</span></div>
                   <div class="card-row"><span class="card-lbl">JOINED:</span><span>${regDate}</span></div>
-                  <div class="card-row"><span class="card-lbl">STATUS:</span><span style="color:#4ade80;font-weight:800;">ACTIVE &amp; VERIFIED</span></div>
+                  <div class="card-row">
+                    <span class="card-lbl">STATUS:</span>
+                    ${isCancelled 
+                      ? `<span style="color:#ef4444;font-weight:800;">CANCELLED &amp; INACTIVE</span>`
+                      : `<span style="color:#4ade80;font-weight:800;">ACTIVE &amp; VERIFIED</span>`
+                    }
+                  </div>
                 </div>
                 ${qrDataUrl ? `
                   <div class="card-qr">
@@ -863,6 +910,12 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
               </div>
             </div>
           </div>
+
+          ${isCancelled ? `
+            <div style="border: 2px solid #fca5a5; background: #fef2f2; color: #991b1b; font-weight: 800; font-size: 10px; padding: 10px 14px; border-radius: 8px; text-align: center; text-transform: uppercase; margin-top: 5px;">
+              ⚠️ NOTICE: THIS MEMBERSHIP HAS BEEN OFFICIALLY CANCELLED. THIS DOCUMENT IS NO LONGER VALID FOR SANGHA BENEFITS, EVENT ENTRY, OR MEMBER VERIFICATION.
+            </div>
+          ` : ''}
 
           <!-- TERMS & CONDITIONS -->
           <div class="terms-box">
@@ -908,6 +961,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
   // Trigger Download Member Card
   const handleDownloadCard = () => {
     if (!membership) return;
+    const isCancelled = Boolean(membership.isActive === false || membership.status === 'CANCELLED' || membership.is_active === false || membership.is_active === 0);
     printMemberIdCard({
       fullName: membership.fullName || user.name,
       memberId: membership.memberId || membership.membership_id,
@@ -915,6 +969,7 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
       city: membership.city,
       registrationDate: membership.registrationDate || membership.created_at || 'Active',
       photoUrl: membership.photoUrl || membership.photo_url,
+      isCancelled,
     }, qrCodeDataUrl);
   };
 
@@ -1575,10 +1630,37 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
         {activeTab === 'membership' && (
           <div className="space-y-8 animate-fade-in">
             {membership ? (
-              /* Display Member ID Card – card only, clean view */
               <div className="max-w-lg mx-auto space-y-5">
+                {isCancelledMem && (
+                  <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center font-black text-lg flex-shrink-0">✕</div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-rose-900">Membership Status: CANCELLED</h4>
+                        <p className="text-xs text-rose-700 mt-0.5">Your lifetime membership (ID: {membership.memberId}) was cancelled. It is no longer active for sangha benefits.</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMembership(null)}
+                      className="px-4 py-2 bg-[#0A6C87] text-white rounded-xl text-xs font-bold hover:bg-cyan-800 transition-colors shadow-md flex-shrink-0"
+                    >
+                      Re-activate / Buy Membership
+                    </button>
+                  </div>
+                )}
+
                 {/* Physical-style ID Card */}
-                <div className="bg-gradient-to-br from-[#0A6C87] via-[#075e78] to-[#043A4B] rounded-2xl border-4 border-[#E5C100] shadow-2xl p-5 text-white relative overflow-hidden">
+                <div className={`bg-gradient-to-br from-[#0A6C87] via-[#075e78] to-[#043A4B] rounded-2xl border-4 ${isCancelledMem ? 'border-rose-500 shadow-rose-900/30' : 'border-[#E5C100]'} shadow-2xl p-5 text-white relative overflow-hidden`}>
+                  {/* Cancelled Stamp Seal Overlay */}
+                  {isCancelledMem && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                      <div className="border-4 border-rose-500 text-rose-500 text-2xl font-black px-6 py-2 rounded-xl bg-slate-950/90 -rotate-12 shadow-2xl tracking-widest uppercase">
+                        CANCELLED
+                      </div>
+                    </div>
+                  )}
+
                   {/* decorative blobs */}
                   <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#E5C100]/10 rounded-full pointer-events-none" />
                   <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-white/5 rounded-full pointer-events-none" />
@@ -1592,7 +1674,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                         <p className="text-[8px] text-sky-200 font-semibold">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ • Official ID Card</p>
                       </div>
                     </div>
-                    <span className="bg-[#E5C100] text-[#0A6C87] text-[8px] font-extrabold px-2.5 py-1 rounded-full uppercase">LIFETIME MEMBER</span>
+                    <span className={isCancelledMem ? 'bg-rose-600 text-white text-[8px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider' : 'bg-[#E5C100] text-[#0A6C87] text-[8px] font-extrabold px-2.5 py-1 rounded-full uppercase'}>
+                      {isCancelledMem ? 'CANCELLED' : 'LIFETIME MEMBER'}
+                    </span>
                   </div>
 
                   {/* Card Body */}
@@ -1619,7 +1703,17 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                         <p><span className="text-sky-300 font-bold uppercase text-[8px] mr-1">Phone:</span>{membership.phone || '-'}</p>
                         <p><span className="text-sky-300 font-bold uppercase text-[8px] mr-1">City:</span>{membership.city || 'Karnataka'}</p>
                         <p><span className="text-sky-300 font-bold uppercase text-[8px] mr-1">Joined:</span>{membership.registrationDate || membership.created_at || '-'}</p>
-                        <p><span className="text-[8px] bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-bold px-2 py-0.5 rounded-full">✓ ACTIVE &amp; VERIFIED</span></p>
+                        <p>
+                          {isCancelledMem ? (
+                            <span className="text-[8px] bg-rose-500/40 border border-rose-400/50 text-rose-200 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              ✕ CANCELLED &amp; INACTIVE
+                            </span>
+                          ) : (
+                            <span className="text-[8px] bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                              ✓ ACTIVE &amp; VERIFIED
+                            </span>
+                          )}
+                        </p>
                       </div>
                     </div>
                     {/* QR if available */}

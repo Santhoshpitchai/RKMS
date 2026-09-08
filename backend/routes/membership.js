@@ -32,8 +32,19 @@ const membershipValidation = [
 
 const { userOrAdminAuth } = require('../middlewares/userAuth');
 
-// Check existing membership status by email
-router.get('/status', userOrAdminAuth, getMembershipStatus);
+// Check existing membership status
+// — Public access allowed when ?memberId= is provided (QR code scan)
+// — Auth required when ?email= is provided (member dashboard)
+const optionalAuth = (req, res, next) => {
+    if (req.query.memberId || req.query.id) {
+        // QR code scan — public, no auth needed
+        return next();
+    }
+    // Email-based lookup — require valid token
+    return userOrAdminAuth(req, res, next);
+};
+
+router.get('/status', optionalAuth, getMembershipStatus);
 
 // Create membership order
 router.post('/create-order', membershipValidation, createMembershipOrder);

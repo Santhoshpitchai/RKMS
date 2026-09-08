@@ -280,6 +280,7 @@ export function Membership() {
     city?: string;
     registrationDate?: string;
     photoUrl?: string;
+    isCancelled?: boolean;
   }) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -293,12 +294,13 @@ export function Membership() {
     const memberCity = member.city || 'Bengaluru';
     const regDate = member.registrationDate || 'Active';
     const memberPhotoUrl = member.photoUrl;
+    const isCancelled = Boolean(member.isCancelled);
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>RKS Mahila Sangha \u2013 Official Member ID Card</title>
+        <title>RKS Mahila Sangha – Official Member ID Card</title>
         <meta charset="UTF-8" />
         <style>
           @page { size: A4 portrait; margin: 18mm 15mm; }
@@ -318,10 +320,33 @@ export function Membership() {
           .org-name-block .org-kn { font-size: 13px; color: #0891b2; font-weight: 600; margin-top: 1px; }
           .org-name-block .org-tag { font-size: 10px; color: #64748b; margin-top: 2px; }
           .org-badge { margin-left: auto; background: #E5C100; color: #0A6C87; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+          .org-badge.cancelled { background: #ef4444 !important; color: #ffffff !important; }
+          .cancelled-seal {
+            position: absolute;
+            top: 48%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-18deg);
+            border: 4px solid #ef4444;
+            color: #ef4444;
+            font-size: 32px;
+            font-weight: 900;
+            letter-spacing: 6px;
+            padding: 8px 24px;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.88);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            text-transform: uppercase;
+            white-space: nowrap;
+            z-index: 30;
+            pointer-events: none;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
 
           /* CARD */
           .card-wrap { display: flex; justify-content: center; }
           .id-card { width: 500px; background: linear-gradient(135deg, #0A6C87 0%, #064E62 60%, #043A4B 100%); border-radius: 16px; border: 3px solid #E5C100; color: white; padding: 16px 20px; position: relative; overflow: hidden; box-shadow: 0 8px 24px rgba(10,108,135,0.25); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .id-card.cancelled-card { border-color: #ef4444 !important; }
           .id-card::before { content: ''; position: absolute; top: -50px; right: -50px; width: 160px; height: 160px; background: rgba(229,193,0,0.10); border-radius: 50%; }
           .id-card::after { content: ''; position: absolute; bottom: -40px; left: -40px; width: 120px; height: 120px; background: rgba(255,255,255,0.05); border-radius: 50%; }
           .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.25); padding-bottom: 10px; margin-bottom: 12px; }
@@ -330,6 +355,7 @@ export function Membership() {
           .card-title { font-size: 12px; font-weight: 800; text-transform: uppercase; line-height: 1.2; }
           .card-subtitle { font-size: 8px; color: #7dd3fc; font-weight: 600; }
           .lifetime-badge { background: #E5C100; color: #0A6C87; font-size: 7.5px; font-weight: 900; padding: 3px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .lifetime-badge.cancelled { background: #ef4444 !important; color: #ffffff !important; }
           .card-body { display: flex; gap: 14px; align-items: center; }
           .photo-slot { width: 82px; height: 98px; border-radius: 8px; border: 2px solid #E5C100; overflow: hidden; background: #0f172a; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
           .photo-slot img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
@@ -346,7 +372,7 @@ export function Membership() {
           .terms-title { font-size: 12px; font-weight: 800; color: #0A6C87; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; }
           .terms-list { list-style: none; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
           .terms-list li { font-size: 9.5px; color: #475569; padding-left: 14px; position: relative; line-height: 1.5; }
-          .terms-list li::before { content: '\u2726'; position: absolute; left: 0; color: #0A6C87; font-size: 7px; top: 2px; }
+          .terms-list li::before { content: '✦'; position: absolute; left: 0; color: #0A6C87; font-size: 7px; top: 2px; }
 
           /* PAGE FOOTER */
           .page-footer { border-top: 2px solid #0A6C87; padding-top: 10px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; color: #475569; }
@@ -366,21 +392,27 @@ export function Membership() {
               <div class="org-kn">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ</div>
               <div class="org-tag">Official Member Identity Document</div>
             </div>
-            <div class="org-badge">&#10003; Verified Lifetime Member</div>
+            ${isCancelled 
+              ? `<div class="org-badge cancelled">✕ MEMBERSHIP CANCELLED</div>`
+              : `<div class="org-badge">✓ Verified Lifetime Member</div>`
+            }
           </div>
 
           <!-- MEMBER ID CARD -->
           <div class="card-wrap">
-            <div class="id-card">
+            <div class="id-card ${isCancelled ? 'cancelled-card' : ''}">
+              ${isCancelled ? `<div class="cancelled-seal">CANCELLED</div>` : ''}
               <div class="card-header">
                 <div class="card-header-left">
                   <img src="${logo}" class="card-logo" />
                   <div>
                     <div class="card-title">Raju Kshatriya Mahila Sangha</div>
-                    <div class="card-subtitle">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ &nbsp;&bull;&nbsp; Official ID Card</div>
+                    <div class="card-subtitle">ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ &nbsp;•&nbsp; Official ID Card</div>
                   </div>
                 </div>
-                <span class="lifetime-badge">LIFETIME MEMBER</span>
+                <span class="lifetime-badge ${isCancelled ? 'cancelled' : ''}">
+                  ${isCancelled ? 'CANCELLED' : 'LIFETIME MEMBER'}
+                </span>
               </div>
               <div class="card-body">
                 <div class="photo-slot">
@@ -392,9 +424,27 @@ export function Membership() {
                   <div class="card-row"><span class="card-lbl">PHONE:</span><span>${memberPhone}</span></div>
                   <div class="card-row"><span class="card-lbl">CITY:</span><span>${memberCity}</span></div>
                   <div class="card-row"><span class="card-lbl">JOINED:</span><span>${regDate}</span></div>
-                  <div class="card-row"><span class="card-lbl">STATUS:</span><span style="color:#4ade80;font-weight:800;">ACTIVE &amp; VERIFIED</span></div>
+                  <div class="card-row">
+                    <span class="card-lbl">STATUS:</span>
+                    ${isCancelled 
+                      ? `<span style="color:#ef4444;font-weight:800;">CANCELLED &amp; INACTIVE</span>`
+                      : `<span style="color:#4ade80;font-weight:800;">ACTIVE &amp; VERIFIED</span>`
+                    }
+                  </div>
                 </div>
               </div>
+              <div class="card-footer">
+                <span>RKS Mahila Sangha &nbsp;•&nbsp; RR Nagar, Bengaluru &nbsp;|&nbsp; +91 9972648909</span>
+                <span>Authorized Signatory – RKS Sangha</span>
+              </div>
+            </div>
+          </div>
+
+          ${isCancelled ? `
+            <div style="border: 2px solid #fca5a5; background: #fef2f2; color: #991b1b; font-weight: 800; font-size: 10px; padding: 10px 14px; border-radius: 8px; text-align: center; text-transform: uppercase; margin-top: 5px;">
+              ⚠️ NOTICE: THIS MEMBERSHIP HAS BEEN OFFICIALLY CANCELLED. THIS DOCUMENT IS NO LONGER VALID FOR SANGHA BENEFITS, EVENT ENTRY, OR MEMBER VERIFICATION.
+            </div>
+          ` : ''}
               <div class="card-footer">
                 <span>RKS Mahila Sangha &nbsp;&bull;&nbsp; RR Nagar, Bengaluru &nbsp;|&nbsp; +91 9972648909</span>
                 <span>Authorized Signatory &ndash; RKS Sangha</span>

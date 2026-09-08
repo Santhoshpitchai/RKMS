@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { ShieldCheck, ShieldAlert, CheckCircle2, User, Calendar, Award, ArrowLeft } from 'lucide-react';
 import logo from '../assets/RKMS Logo.png';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+import { API_BASE_URL } from '../services/api';
 
 export function VerifyMember() {
   const [searchParams] = useSearchParams();
@@ -77,50 +77,76 @@ export function VerifyMember() {
               </Link>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-full border border-emerald-200 text-xs font-extrabold shadow-sm">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>OFFICIAL VERIFIED ACTIVE MEMBER</span>
-              </div>
+            (() => {
+              const isCancelled = Boolean(member.isActive === false || member.status === 'CANCELLED' || member.is_active === false || member.is_active === 0);
+              return (
+                <div className="space-y-6">
+                  {/* Badge */}
+                  {isCancelled ? (
+                    <div className="inline-flex items-center gap-2 bg-rose-100 text-rose-800 px-4 py-2 rounded-full border border-rose-300 text-xs font-black shadow-sm">
+                      <ShieldAlert className="w-4 h-4 text-rose-600" />
+                      <span>OFFICIAL MEMBERSHIP CANCELLED</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-full border border-emerald-200 text-xs font-extrabold shadow-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>OFFICIAL VERIFIED ACTIVE MEMBER</span>
+                    </div>
+                  )}
 
-              {/* Details Card */}
-              <div className="bg-gradient-to-br from-cyan-50 to-emerald-50 p-5 rounded-2xl border border-cyan-100 text-left space-y-3">
-                <div>
-                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Member Full Name</span>
-                  <span className="text-lg font-extrabold text-gray-900">{member.fullName || member.name}</span>
+                  {/* Details Card */}
+                  <div className={`p-5 rounded-2xl border text-left space-y-3 ${isCancelled ? 'bg-gradient-to-br from-rose-50 to-amber-50 border-rose-200' : 'bg-gradient-to-br from-cyan-50 to-emerald-50 border-cyan-100'}`}>
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Member Full Name</span>
+                      <span className="text-lg font-extrabold text-gray-900">{member.fullName || member.name}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200/80">
+                      <div>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Membership ID</span>
+                        <span className="text-sm font-extrabold text-[#0A6C87] font-mono">{member.memberId || memberId}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Membership Status</span>
+                        {isCancelled ? (
+                          <span className="text-xs font-extrabold text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-full inline-block mt-0.5 uppercase">
+                            CANCELLED
+                          </span>
+                        ) : (
+                          <span className="text-xs font-extrabold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full inline-block mt-0.5 uppercase">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {member.gotraName && (
+                      <div className="pt-2 border-t border-gray-200/80">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Gotra</span>
+                        <span className="text-xs font-bold text-gray-800">{member.gotraName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {isCancelled && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 font-semibold leading-relaxed">
+                      ⚠️ Note: This membership was cancelled and is no longer valid for official RKS Sangha benefits or event access.
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-gray-500 italic">
+                    Verified against Official Registrar of Societies DRB1/SOR/343/2024-2025.
+                  </div>
+
+                  <Link
+                    to="/"
+                    className="block w-full bg-[#0A6C87] text-white py-3 rounded-xl font-bold text-xs hover:bg-cyan-800 transition-colors shadow-md"
+                  >
+                    Return to RKS Mahila Sangha Home
+                  </Link>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-cyan-100">
-                  <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Membership ID</span>
-                    <span className="text-sm font-extrabold text-[#0A6C87] font-mono">{member.memberId || memberId}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Membership Type</span>
-                    <span className="text-xs font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full inline-block mt-0.5">LIFETIME</span>
-                  </div>
-                </div>
-
-                {member.gotraName && (
-                  <div className="pt-2 border-t border-cyan-100">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Gotra</span>
-                    <span className="text-xs font-bold text-gray-800">{member.gotraName}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-[11px] text-gray-500 italic">
-                Verified against Official Registrar of Societies DRB1/SOR/343/2024-2025.
-              </div>
-
-              <Link
-                to="/"
-                className="block w-full bg-[#0A6C87] text-white py-3 rounded-xl font-bold text-xs hover:bg-cyan-800 transition-colors shadow-md"
-              >
-                Return to RKS Mahila Sangha Home
-              </Link>
-            </div>
+              );
+            })()
           )}
         </div>
       </div>

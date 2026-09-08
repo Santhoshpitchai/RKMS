@@ -13,7 +13,9 @@ const {
     deleteAdmin,
     fetchAuditLogs,
     requestAdminForgotPasswordOtp,
-    resetAdminPassword
+    resetAdminPassword,
+    requestNewAdminOtp,
+    toggleMemberStatus
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -35,10 +37,12 @@ router.use(protect); // Apply auth middleware to all routes below
 router.get('/audit-logs', fetchAuditLogs);
 router.get('/all-admins', getAllAdmins);
 router.delete('/admins/:id', deleteAdmin);
+router.post('/request-new-admin-otp', requestNewAdminOtp);
 router.post('/register', registerAdmin);
 router.post('/reset-password', resetPassword);
 router.get('/dashboard', getDashboard);
 router.get('/members', getMembers);
+router.put('/members/status', toggleMemberStatus);
 router.get('/payments', getPayments);
 router.get('/event-registrations', getEventRegistrations);
 
