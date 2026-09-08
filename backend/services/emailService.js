@@ -31,6 +31,10 @@ const sendOtpEmail = async (toEmail, recipientName, otpCode) => {
     console.log(`==================================================\n`);
   }
 
+  if (process.env.NODE_ENV === 'test') {
+    return { success: true, simulated: true, otp: otpCode };
+  }
+
   try {
     const transporter = createTransporter();
     if (!transporter) {
