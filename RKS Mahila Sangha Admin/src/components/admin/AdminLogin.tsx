@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Lock, User, UserPlus, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Lock, User, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '../../services/api';
 import logo from '../../assets/RKMS-Logo.png';
 
-type Mode = 'login' | 'register' | 'forgot';
+type Mode = 'login' | 'forgot';
 
 export function AdminLogin() {
   const navigate = useNavigate();
@@ -33,36 +33,6 @@ export function AdminLogin() {
       }
     } catch {
       toast.error('Login failed. Please verify credentials.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!credentials.username || !credentials.password) {
-      toast.error('Please enter username and password');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const response = await adminApi.register(credentials);
-      if (response.success) {
-        toast.success('Admin account created! Logging in...');
-        const loginRes = await adminApi.login(credentials);
-        if (loginRes.success && loginRes.token) {
-          localStorage.setItem('adminToken', loginRes.token);
-          localStorage.setItem('adminAuth', 'true');
-          localStorage.setItem('adminUsername', credentials.username);
-          navigate('/admin/dashboard');
-        } else {
-          setMode('login');
-        }
-      } else {
-        toast.error(response.message || 'Failed to create admin account');
-      }
-    } catch {
-      toast.error('Registration failed');
     } finally {
       setIsLoading(false);
     }
@@ -241,39 +211,6 @@ export function AdminLogin() {
             </form>
           )}
 
-          {/* ── REGISTER MODE ── */}
-          {mode === 'register' && (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setMode('login')} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                <h2 className="text-base font-extrabold text-white">Create New Admin</h2>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">Username</label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
-                  <input type="text" value={credentials.username} onChange={(e) => setCredentials({ ...credentials, username: e.target.value })} className={inputClass} placeholder="e.g. admin_raj" required />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" />
-                  <input type="password" value={credentials.password} onChange={(e) => setCredentials({ ...credentials, password: e.target.value })} className={inputClass} placeholder="Create a strong password" required />
-                </div>
-              </div>
-              <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-cyan-900/40 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-60 disabled:scale-100 mt-2">
-                <UserPlus className="w-4 h-4" />
-                {isLoading ? 'Creating...' : 'Register Admin'}
-              </button>
-              <button type="button" onClick={() => setMode('login')} className="w-full text-slate-500 hover:text-slate-300 py-1 text-center text-xs transition-colors">
-                Back to Sign In
-              </button>
-            </form>
-          )}
-
           {/* ── FORGOT MODE ── */}
           {mode === 'forgot' && (
             forgotStep === 'username' ? (
@@ -375,16 +312,6 @@ export function AdminLogin() {
 
 
         </div>
-
-        {/* Register link below card */}
-        {mode === 'login' && (
-          <p className="text-center mt-5 text-xs text-slate-600">
-            Need a new admin account?{' '}
-            <button onClick={() => setMode('register')} className="text-cyan-400 hover:text-cyan-300 font-bold transition-colors">
-              Create One
-            </button>
-          </p>
-        )}
       </div>
     </div>
   );
