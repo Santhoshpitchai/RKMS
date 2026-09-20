@@ -146,7 +146,9 @@ export const membershipApi = {
     guardianName?: string;
     gotraName?: string;
     dateOfBirth?: string;
+    educationalQualification?: string;
     profession?: string;
+    bloodGroup?: string;
     address?: string;
     city?: string;
     state?: string;
@@ -296,13 +298,15 @@ export const eventsApi = {
     });
     return response.json() as Promise<ApiResponse<any>>;
   },
-  cancelRegistration: async (registrationDbId: number) => {
+  cancelRegistration: async (registrationDbId: number, email?: string) => {
     const token = localStorage.getItem('userToken');
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const response = await fetch(`${API_BASE_URL}/events/registration/${registrationDbId}?by=member`, {
+    const userEmail = email || localStorage.getItem('userEmail') || '';
+    const response = await fetch(`${API_BASE_URL}/events/registration/${registrationDbId}?by=member&email=${encodeURIComponent(userEmail)}`, {
       method: 'DELETE',
       headers,
+      body: JSON.stringify({ email: userEmail, by: 'member' }),
     });
     return response.json() as Promise<ApiResponse<any>>;
   },

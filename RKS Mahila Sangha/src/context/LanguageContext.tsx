@@ -24,8 +24,8 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Hero
     'hero.badge': 'ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ • Estd 2022',
-    'hero.title': 'Empowering Women, Preserving Culture & Community Welfare',
-    'hero.desc': 'Raju Kshatriya Mahila Sangha is a non-profit community organization dedicated to the social, educational, and cultural advancement of women and families across Karnataka.',
+    'hero.title': 'Empowering Women',
+    'hero.desc': 'Raju Kshatriya Mahila Sangha is a non-profit community organization dedicated to the social, educational, cultural and health advancement of women and families across Karnataka.',
     'hero.joinBtn': 'Become a Lifetime Member',
     'hero.donateBtn': 'Support Sangha Activities (Donate)',
 
@@ -132,7 +132,7 @@ const translations: Record<Language, Record<string, string>> = {
 
     // Hero
     'hero.badge': 'ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ • ಸ್ಥಾಪನೆ 2022',
-    'hero.title': 'ಮಹಿಳಾ ಸಬಲೀಕರಣ, ಸಂಸ್ಕೃತಿ ರಕ್ಷಣೆ ಮತ್ತು ಸಮುದಾಯ ಕಲ್ಯಾಣ',
+    'hero.title': 'ಮಹಿಳಾ ಸಬಲೀಕರಣ',
     'hero.desc': 'ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘವು ಕರ್ನಾಟಕದಾದ್ಯಂತ ಮಹಿಳೆಯರು ಮತ್ತು ಕುಟುಂಬಗಳ ಸಾಮಾಜಿಕ, ಶೈಕ್ಷಣಿಕ ಮತ್ತು ಸಾಂಸ್ಕೃತಿಕ ಅಭಿವೃದ್ಧಿಗೆ ಶ್ರಮಿಸುವ ಸ್ವಯಂಸೇವಾ ಸಂಘಟನೆಯಾಗಿದೆ.',
     'hero.joinBtn': 'ಆಜೀವ ಸದಸ್ಯರಾಗಿ (₹1,001)',
     'hero.donateBtn': 'ಸಂಘದ ಚಟುವಟಿಕೆಗಳಿಗೆ ಬೆಂಬಲಿಸಿ (ದೇಣಿಗೆ)',

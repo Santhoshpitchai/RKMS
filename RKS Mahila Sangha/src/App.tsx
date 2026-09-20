@@ -13,6 +13,7 @@ import { Donate } from './components/Donate';
 import { MemberDashboard } from './components/MemberDashboard';
 import { VerifyMember } from './components/VerifyMember';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { GrandLaunchCelebration } from './components/GrandLaunchCelebration';
 
 export default function App() {
   const [user, setUser] = useState<{ name: string; email: string; phone?: string } | null>(null);
@@ -68,6 +69,7 @@ export default function App() {
       <Router>
         <Toaster position="top-right" richColors />
         <ScrollToTop />
+        <GrandLaunchCelebration />
         <div className="min-h-screen flex flex-col bg-gray-50">
           <Header />
           <main className="flex-1">

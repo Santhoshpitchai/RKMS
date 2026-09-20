@@ -300,61 +300,76 @@ const loginUser = async (req, res) => {
       }
     }
 
-    if (user && user.password) {
-      let isMatch = false;
-      if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(password, user.password);
-      } else {
-        isMatch = (password === user.password);
-        if (isMatch && isSupabaseConfigured()) {
-          // Auto-hash plain text password in DB for future security
-          try {
-            const newHash = await bcrypt.hash(password, 10);
-            await supabase.from('users').update({ password: newHash }).eq('email', cleanEmail);
-          } catch (_) {}
-        }
-      }
+    if (!user) {
+      try {
+        const [rows] = await pool.query('SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1', [cleanEmail]);
+        if (rows && rows.length) user = rows[0];
+      } catch (_) {}
+    }
 
-      if (!isMatch) {
-        return res.status(401).json({ success: false, message: 'Invalid email or password' });
-      }
-
-      // Check if user is verified (if column exists)
-      if (user.is_verified === false) {
-        const otpCode = generate6DigitOtp();
-        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-        try {
-          await supabase.from('users').update({ otp_code: otpCode, otp_expires_at: otpExpiresAt }).eq('email', cleanEmail);
-        } catch (e) {}
-        
-        otpStore.set(cleanEmail, { otpCode, expiresAt: Date.now() + 10 * 60 * 1000, name: user.name });
-        await sendOtpEmail(cleanEmail, user.name, otpCode);
-
-        return res.status(403).json({
-          success: false,
-          requiresVerification: true,
-          email: user.email,
-          message: 'Your email is not verified yet. A 6-digit OTP has been sent to your email.'
-        });
-      }
-
-      const token = jwt.sign({ id: user.id, role: 'user', email: user.email, name: user.name }, secret, { expiresIn: '7d' });
-
-      return res.status(200).json({
-        success: true,
-        message: 'Login successful!',
-        token,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone
-        }
+    // 1. Explicit check: If email is not in DB, notify user to create an account
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        noAccount: true,
+        message: 'No account found with this email. Please create an account and verify to log in.'
       });
     }
 
-    // Strictly reject login if user does not exist in DB or password invalid
-    return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    // 2. Check password match
+    let isMatch = false;
+    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+      isMatch = await bcrypt.compare(password, user.password);
+    } else {
+      isMatch = (password === user.password);
+      if (isMatch && isSupabaseConfigured()) {
+        // Auto-hash plain text password in DB for future security
+        try {
+          const newHash = await bcrypt.hash(password, 10);
+          await supabase.from('users').update({ password: newHash }).eq('email', cleanEmail);
+        } catch (_) {}
+      }
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Incorrect password. Please check your password or click Forgot Password.'
+      });
+    }
+
+    // 3. Check if user is verified
+    if (user.is_verified === false) {
+      const otpCode = generate6DigitOtp();
+      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      try {
+        await supabase.from('users').update({ otp_code: otpCode, otp_expires_at: otpExpiresAt }).eq('email', cleanEmail);
+      } catch (e) {}
+      
+      otpStore.set(cleanEmail, { otpCode, expiresAt: Date.now() + 10 * 60 * 1000, name: user.name });
+      await sendOtpEmail(cleanEmail, user.name, otpCode);
+
+      return res.status(403).json({
+        success: false,
+        requiresVerification: true,
+        email: user.email,
+        message: 'Your email is not verified yet. A 6-digit OTP has been sent to your email.'
+      });
+    }
+
+    const token = jwt.sign({ id: user.id, role: 'user', email: user.email, name: user.name }, secret, { expiresIn: '7d' });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful!',
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone
+      }
+    });
   } catch (error) {
     console.error('Login user error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -497,7 +512,9 @@ const getUserHistory = async (req, res) => {
           email: member.email,
           phone: member.phone,
           dateOfBirth: member.date_of_birth,
-          profession: member.profession,
+          educationalQualification: member.educational_qualification || '',
+          profession: member.profession || '',
+          bloodGroup: member.blood_group || '',
           address: member.address,
           city: member.city,
           state: member.state,
@@ -595,7 +612,9 @@ const getUserHistory = async (req, res) => {
           email: member.email,
           phone: member.phone,
           dateOfBirth: member.date_of_birth,
-          profession: member.profession,
+          educationalQualification: member.educational_qualification || '',
+          profession: member.profession || '',
+          bloodGroup: member.blood_group || '',
           address: member.address,
           city: member.city,
           state: member.state,

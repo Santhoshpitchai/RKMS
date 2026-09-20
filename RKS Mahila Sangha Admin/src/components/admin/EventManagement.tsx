@@ -60,6 +60,30 @@ export function EventManagement() {
 
   useEffect(() => {
     loadData();
+
+    let sse: EventSource | null = null;
+    try {
+      const apiOrigin = window.location.origin.includes('localhost')
+        ? 'http://localhost:5001'
+        : 'https://api.rajukshatriyamahilasangha.com';
+      sse = new EventSource(`${apiOrigin}/api/realtime/stream`);
+      sse.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (['events_updated', 'payment_updated'].includes(data.type)) {
+            loadData();
+          }
+        } catch (err) {}
+      };
+    } catch (e) {}
+
+    const handleCustomEvent = () => loadData();
+    window.addEventListener('events_updated', handleCustomEvent);
+
+    return () => {
+      if (sse) sse.close();
+      window.removeEventListener('events_updated', handleCustomEvent);
+    };
   }, []);
 
   const [showModal, setShowModal] = useState(false);
@@ -278,7 +302,7 @@ export function EventManagement() {
       toast.error('No event registration records to export.');
       return;
     }
-    const headers = ['Event Title', 'Attendee Name', 'Email', 'Phone', 'Registration ID', 'Accompanying Count', 'Amount Paid', 'Registration Status', 'Registration Date'];
+    const headers = ['Event Title', 'Attendee Name', 'Email', 'Phone', 'Registration ID', 'Membership ID', 'Accompanying Count', 'Amount Paid', 'Payment ID', 'Order ID', 'Registration Status', 'Registration Date'];
     const lines = [
       headers.join(','),
       ...registrations.map((r) =>
@@ -288,8 +312,11 @@ export function EventManagement() {
           r.email || '',
           r.phone || '',
           r.registration_id || r.registrationId || '',
+          r.membership_id || '',
           r.number_of_attendees || r.accompanying_count || 1,
           r.payment_amount || 0,
+          r.payment_id || '',
+          r.order_id || '',
           r.payment_status === 'cancelled_by_member' ? 'Cancelled by Member' : r.payment_status === 'cancelled_by_admin' ? 'Cancelled by Admin' : (r.payment_status || 'COMPLETED').toUpperCase(),
           (r.created_at || '').slice(0, 10),
         ]
@@ -566,70 +593,95 @@ export function EventManagement() {
                     <th className="py-3 px-4">Membership ID</th>
                     <th className="py-3 px-4">Attendees</th>
                     <th className="py-3 px-4">Payment</th>
+                    <th className="py-3 px-4">Payment ID / Order ID</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {registrations.map((r, idx) => (
-                    <tr key={r.id || idx} className="hover:bg-slate-900/50 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-white">
-                        {r.event_title || r.events?.title || `Event #${r.event_id}`}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs font-bold text-cyan-400">
-                        {r.registration_id || r.registrationId || `REG-${r.id}`}
-                      </td>
-                      <td className="py-3 px-4">
-                        <p className="font-medium text-slate-200">{r.name}</p>
-                        <p className="text-[11px] text-slate-400">{r.email} {r.phone ? `• ${r.phone}` : ''}</p>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-300">{r.membership_id || '-'}</td>
-                      <td className="py-3 px-4 font-bold text-slate-200">
-                        {r.number_of_attendees || r.accompanying_count || 1} Person(s)
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase inline-block border ${
-                          r.payment_status === 'cancelled_by_member'
-                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                            : r.payment_status === 'cancelled_by_admin' || r.payment_status === 'cancelled'
-                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
-                            : r.payment_status === 'completed'
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                        }`}>
-                          {r.payment_status === 'cancelled_by_member'
-                            ? 'CANCELLED BY MEMBER'
-                            : r.payment_status === 'cancelled_by_admin'
-                            ? 'CANCELLED BY ADMIN'
-                            : r.payment_status
-                            ? String(r.payment_status).replace(/_/g, ' ').toUpperCase()
-                            : 'COMPLETED'}
-                        </span>
-                        <span className="block font-bold text-emerald-400 text-[11px] mt-0.5">
-                          ₹{Number(r.payment_amount || 0)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {!r.payment_status?.includes('cancelled') && (
-                            <button
-                              onClick={() => handleCancelRegistration(r.id)}
-                              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-extrabold transition-colors flex items-center gap-1"
-                              title="Mark Registration as Cancelled by Admin"
-                            >
-                              <Ban className="w-3.5 h-3.5" /> Cancel
-                            </button>
+                  {registrations.map((r, idx) => {
+                    const isCancelled = Boolean(r.payment_status?.includes('cancelled') || r.payment_status === 'cancelled');
+                    const isCancelledByAdmin = r.payment_status === 'cancelled_by_admin';
+                    const isCancelledByMember = r.payment_status === 'cancelled_by_member' || (isCancelled && !isCancelledByAdmin);
+                    return (
+                      <tr key={r.id || idx} className={`transition-colors ${isCancelled ? 'bg-rose-950/40 border-l-4 border-rose-500' : 'hover:bg-slate-900/50'}`}>
+                        <td className="py-3 px-4">
+                          <p className="font-semibold text-white">{r.event_title || r.events?.title || `Event #${r.event_id}`}</p>
+                          {isCancelled && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-extrabold text-rose-300 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                              {isCancelledByAdmin ? '🚫 CANCELLED BY ADMIN' : '⛔ DENY ENTRY — Member Cancelled'}
+                            </span>
                           )}
-                          <button
-                            onClick={() => handleDeleteRegistrationPermanent(r.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                            title="Permanently Delete Registration from Database"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs font-bold text-cyan-400">
+                          {r.registration_id || r.registrationId || `REG-${r.id}`}
+                        </td>
+                        <td className="py-3 px-4">
+                          <p className={`font-medium ${isCancelled ? 'text-rose-300 font-bold' : 'text-slate-200'}`}>{r.name}</p>
+                          <p className="text-[11px] text-slate-400">{r.email} {r.phone ? `• ${r.phone}` : ''}</p>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-300">{r.membership_id || '-'}</td>
+                        <td className="py-3 px-4 font-bold text-slate-200">
+                          {r.number_of_attendees || r.accompanying_count || 1} Person(s)
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase inline-block border ${
+                            isCancelled
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/50'
+                              : r.payment_status === 'completed'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          }`}>
+                            {isCancelledByAdmin
+                              ? 'CANCELLED BY ADMIN'
+                              : isCancelledByMember
+                              ? '🚫 CANCELLED BY MEMBER'
+                              : r.payment_status
+                              ? String(r.payment_status).replace(/_/g, ' ').toUpperCase()
+                              : 'COMPLETED'}
+                          </span>
+                          <span className="block font-bold text-emerald-400 text-[11px] mt-0.5">
+                            ₹{Number(r.payment_amount || 0)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {r.payment_id ? (
+                            <div className="space-y-0.5">
+                              <p className="font-mono text-[10px] text-cyan-300 font-bold break-all">
+                                🔖 {r.payment_id}
+                              </p>
+                              {r.order_id && (
+                                <p className="font-mono text-[10px] text-slate-400 break-all">
+                                  📋 {r.order_id}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 text-[10px] italic">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {!isCancelled && (
+                              <button
+                                onClick={() => handleCancelRegistration(r.id)}
+                                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-extrabold transition-colors flex items-center gap-1"
+                                title="Mark Registration as Cancelled by Admin"
+                              >
+                                <Ban className="w-3.5 h-3.5" /> Cancel
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteRegistrationPermanent(r.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                              title="Permanently Delete Registration from Database"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

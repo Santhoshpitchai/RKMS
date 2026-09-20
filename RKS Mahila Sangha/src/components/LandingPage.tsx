@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Target, Eye, Users, Heart, Calendar, Award, MapPin, ArrowRight, BookOpen, ShieldCheck, HeartHandshake, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Target, Eye, Users, Heart, Calendar, Award, MapPin, ArrowRight, BookOpen, ShieldCheck, HeartHandshake, CheckCircle2, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import heroImage from '../assets/Heroimage.jpg';
@@ -7,7 +7,7 @@ import logo from '../assets/RKMS Logo.png';
 import { eventsApi, resolveBackendAssetUrl } from '../services/api';
 import { MemberDashboard } from './MemberDashboard';
 import { useLanguage } from '../context/LanguageContext';
-import { useSiteImage } from '../services/useSiteContent';
+import { useSiteImage, useSiteContent } from '../services/useSiteContent';
 import { formatDateSafe } from './EventRegistrationModal';
 
 // Real Leadership Team Assets
@@ -80,6 +80,7 @@ function LandingEventGallery({ images, title }: { images: string[]; title: strin
 
 export function LandingPage() {
   const { t } = useLanguage();
+  const { content } = useSiteContent();
   const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
   const [user, setUser] = useState<{ name: string; email: string; phone?: string } | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -155,13 +156,13 @@ export function LandingPage() {
   }, []);
 
   const committeeMembers = [
-    { name: 'Shantha Kondur', role: 'President & Executive Lead', image: shanthaImg },
-    { name: 'Smt. Padma Raju', role: 'Vice President', image: padmaRajuImg },
-    { name: 'Mrs. Leelakrishnamaraju', role: 'General Secretary', image: leelaImg },
-    { name: 'Ms. Padma R', role: 'Treasurer', image: padmaRImg },
-    { name: 'Smt. Indira', role: 'Joint Secretary', image: indiraImg },
-    { name: 'Pushpa Vasu', role: 'Committee Executive Member', image: pushpaImg },
-    { name: 'Babitha Nadampalli Sreedhara Raju', role: 'Committee Executive Member', image: babithaImg },
+    { name: 'Smt.Shantha Kondur', role: 'Founding Member & Vice President', image: shanthaImg },
+    { name: 'Smt.Padma Raju', role: 'Founding Member and Treasurer', image: padmaRajuImg },
+    { name: 'Smt.Leelakrishnamaraju', role: 'Founding Member and cultural Secretary', image: leelaImg },
+    { name: 'Smt.Padma R', role: ' Joint Secretary ', image: padmaRImg },
+    { name: 'Smt.Indira R', role: ' Founding Member & President', image: indiraImg },
+    { name: 'Smt.Pushpa Vasu', role: 'Committee Member', image: pushpaImg },
+    { name: 'Smt.Babitha Nadampalli Sreedhara Raju', role: ' Founding Member & General Secretary', image: babithaImg },
   ];
 
   // Continuous auto-sliding carousel loop (moves continuously every 2.5 seconds)
@@ -201,11 +202,11 @@ export function LandingPage() {
 
   return (
     <div className="bg-white text-gray-800 font-sans">
-      
+
       {/* 1. Hero Banner - Background Image VISIBLE with Balanced Overlay */}
       <section className="relative bg-[#0A6C87] text-white py-20 md:py-28 overflow-hidden">
         {/* Background Image Fully Visible */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center transition-all duration-700 opacity-100"
           style={{ backgroundImage: `url(${dynamicHero})` }}
         ></div>
@@ -214,13 +215,8 @@ export function LandingPage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-12 gap-8 items-center">
-            
-            <div className="md:col-span-8 space-y-6 text-left">
-              <div className="inline-flex items-center gap-3 bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/30 text-yellow-300 text-xs font-semibold shadow-md">
-                <img src={logo} alt="RKS Logo" className="w-5 h-5 bg-white rounded-full p-0.5" />
-                <span>ರಾಜು ಕ್ಷತ್ರಿಯ ಮಹಿಳಾ ಸಂಘ • Estd 2011</span>
-              </div>
 
+            <div className="md:col-span-8 space-y-6 text-left">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight drop-shadow-md">
                 {t('hero.title')}
               </h1>
@@ -314,21 +310,16 @@ export function LandingPage() {
       {/* 3. About Us & Core Objectives */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <span className="text-xs font-bold text-[#0A6C87] uppercase tracking-wider bg-cyan-50 px-3 py-1 rounded-full border border-cyan-100">
               Our Vision & Mission
             </span>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Building a Unified, Self-Reliant & Empowered Women Community
-            </h2>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Raju Kshatriya Mahila Sangha provides a respectful platform for women to develop leadership, support youth education, and preserve cultural heritage.
-            </p>
+            {/* Header text removed per request */}
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            
+
             {/* Mission */}
             <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 hover:shadow-md transition-shadow">
               <div className="w-12 h-12 rounded-xl bg-cyan-100 text-[#0A6C87] flex items-center justify-center mb-4">
@@ -369,7 +360,7 @@ export function LandingPage() {
       {/* 4. Executive Committee & Leadership CONTINUOUS CAROUSEL with FULL UNCROPPED IMAGES */}
       <section className="py-16 bg-gray-50 border-t border-gray-200 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          
+
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <div>
               <span className="text-xs font-bold text-[#0A6C87] uppercase tracking-wider">
@@ -378,9 +369,6 @@ export function LandingPage() {
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">
                 Executive Committee Members
               </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Continuously moving showcase of our dedicated leaders driving social service initiatives.
-              </p>
             </div>
 
             {/* Manual Controls */}
@@ -405,15 +393,15 @@ export function LandingPage() {
           {/* Continuously Moving Auto Carousel Cards with FULL UNCROPPED IMAGES */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 transition-all duration-700 ease-in-out">
             {visibleMembers.map((member, idx) => (
-              <div 
-                key={`${member.name}-${idx}`} 
+              <div
+                key={`${member.name}-${idx}`}
                 className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-center hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
               >
                 {/* Image Container with object-contain to ensure FULL UNCROPPED PORTRAIT */}
                 <div className="h-64 bg-gray-50 p-3 flex items-center justify-center border-b border-gray-100">
-                  <img 
-                    src={member.image} 
-                    alt={member.name} 
+                  <img
+                    src={member.image}
+                    alt={member.name}
                     className="max-h-full max-w-full object-contain rounded-xl drop-shadow-sm"
                   />
                 </div>
@@ -431,9 +419,8 @@ export function LandingPage() {
               <button
                 key={i}
                 onClick={() => setCarouselIndex(i)}
-                className={`h-2.5 rounded-full transition-all ${
-                  carouselIndex === i ? 'w-8 bg-[#0A6C87]' : 'w-2.5 bg-gray-300 hover:bg-gray-400'
-                }`}
+                className={`h-2.5 rounded-full transition-all ${carouselIndex === i ? 'w-8 bg-[#0A6C87]' : 'w-2.5 bg-gray-300 hover:bg-gray-400'
+                  }`}
                 title={`Go to member ${i + 1}`}
               />
             ))}
@@ -445,7 +432,7 @@ export function LandingPage() {
       {/* 5. Key Community Programs & Activities */}
       <section className="py-16 bg-white border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          
+
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <span className="text-xs font-bold text-[#0A6C87] uppercase tracking-wider">
               Community Programs
@@ -455,19 +442,53 @@ export function LandingPage() {
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: BookOpen, title: 'Educational Support', desc: 'Providing books, scholarships, and academic assistance to deserving students.' },
-              { icon: HeartHandshake, title: 'Social & Relief Welfare', desc: 'Distributing food, ration kits, and financial aid during community needs.' },
-              { icon: ShieldCheck, title: 'Health Camps', desc: 'Organizing free health checkups, eye tests, and medical awareness drives.' },
-              { icon: Calendar, title: 'Cultural Gatherings', desc: 'Celebrating traditional festivals, annual meets, and empowering workshops.' },
+              {
+                icon: BookOpen,
+                key: 'service_educational',
+                title: 'Educational Programs',
+                description: 'We provide educational workshops, literacy programs, and skill development courses to empower women with knowledge and capabilities.',
+              },
+              {
+                icon: Lightbulb,
+                key: 'service_skill',
+                title: 'Skill Development',
+                description: 'Vocational training programs in tailoring, handicrafts, computer skills, and entrepreneurship to enhance employability and self-reliance.',
+              },
+              {
+                icon: Users,
+                key: 'service_community',
+                title: 'Community Support',
+                description: 'Building a strong support network for women through counseling services, peer support groups, and mentorship programs.',
+              },
+              {
+                icon: Heart,
+                key: 'service_welfare',
+                title: 'Women Welfare',
+                description: 'Providing assistance to women in need through healthcare support, financial aid, and legal guidance programs.',
+              },
+              {
+                icon: Calendar,
+                key: 'service_cultural',
+                title: 'Cultural Activities',
+                description: 'Organizing cultural events, traditional celebrations, and heritage preservation programs to keep our rich culture alive.',
+              },
+              {
+                icon: Award,
+                key: 'service_family',
+                title: 'Family Support',
+                description: 'Strengthening family bonds through parenting workshops, marriage counseling, and family welfare programs.',
+              },
             ].map((prog, i) => (
-              <div key={i} className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
-                <div className="w-10 h-10 rounded-lg bg-cyan-100 text-[#0A6C87] flex items-center justify-center">
-                  <prog.icon className="w-5 h-5" />
+              <div key={i} className="p-6 bg-gray-50 rounded-2xl border border-gray-200 space-y-3 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 rounded-xl bg-cyan-100 text-[#0A6C87] flex items-center justify-center">
+                  <prog.icon className="w-6 h-6" />
                 </div>
-                <h4 className="font-bold text-gray-900 text-sm">{prog.title}</h4>
-                <p className="text-xs text-gray-600 leading-relaxed">{prog.desc}</p>
+                <h4 className="font-bold text-gray-900 text-base">{prog.title}</h4>
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  {content[`${prog.key}_desc`] || prog.description}
+                </p>
               </div>
             ))}
           </div>
@@ -524,7 +545,7 @@ export function LandingPage() {
                           </span>
                         </div>
                       )}
-                      
+
                       <div className="p-5 space-y-2">
                         <h4 className="font-bold text-gray-900 text-base line-clamp-1">{evt.title}</h4>
                         <div>

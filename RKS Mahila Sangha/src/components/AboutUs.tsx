@@ -23,59 +23,52 @@ export function AboutUs() {
 
   const currentMembers = [
     {
-      name: 'Smt. Indira',
+      name: 'Smt. Indira R ',
       title: 'Founding Member & President',
       photo: smtIndira,
-      highlight: 'Daughter of Late Sri V. Ramaraju (former RKS Secretary) • Office & Accounts Expert',
-      bio: 'Smt. Indira Raju is the daughter of Late Sri V. Ramaraju (former Secretary of R.K.S., Bangalore). Smt Indira is the Founding Member and President of the Sangha. With a vision to bring women of the community to the forefront, she is dedicated to their upliftment and empowerment. Having served as a Secretary in a Credit Co-operative Society, she possesses valuable experience in office administration and accounts. She actively encourages collective participation to achieve the objectives of the Sangha.'
+      bio: 'Smt. Indira Raju is the daughter of Late Sri V. Ramaraju, (former Secretary of R.K.S., Bangalore). Smt Indira is the Founding Member and President of the Sangha. With a vision to bring women of the community to the forefront, she is dedicated to their upliftment and empowerment.\n\nHaving served as a Secretary in a Credit Co-operative Society, she possesses valuable experience in office administration and accounts. She actively encourages collective participation to achieve the objectives of the Sangha.'
     },
     {
-      name: 'Shantha Kondur, BSc, MBA (HR)',
+      name: 'Smt.Shantha Kondur',
       title: 'Founding Member & Vice President',
       photo: shanthaKondur,
-      highlight: 'Retired Deputy Controller of Accounts at KPTCL • 34+ Years Finance & HR Leadership',
-      bio: 'A retired Deputy Controller of Accounts Officer at KPTCL (erstwhile KEB), Mrs. Shantha Kondur brings 34 years of experience in Revenue, Auditing, Finance & Accounts, and Service Regulations. Recognized for her dedication, she held key positions throughout her career and made history as the first woman officer to serve at the Corporate Office as Assistant General Manager - AGM (Services). Having retired 6 years ago, she still continues to be consulted on pay fixation matters across Karnataka and has contributed to recruitment, pay revisions, and policy updates.'
+      bio: 'A retired Deputy Controller of Accounts Officer at KPTCL (erstwhile KEB), Mrs. Shantha Kondur brings 34 years of experience in Revenue, Auditing, Finance & Accounts, and Service Regulations. Recognized for her dedication, she held key positions throughout her career and made history as the first woman officer to serve at the Corporate Office as Assistant General Manager -AGM (Services). Having retired 6 years ago, she still continues to be consulted on pay fixation matters across the State of Karnataka and has contributed to recruitment, pay revisions, labour issues, and policy updates.\n\nShe is passionate about travel and reading, and strongly believes in kindness and helping those in need. She is the Vice President and a founding member of the Raju Kshatriya Mahila Sangha.\n\nAs the First woman professional from her paternal side , she has broken glass ceilings. She is grateful for the support of her husband who served as the Secretary of the Raju Kshatriya Sangha, her 2 daughters and the love received from her grandchildren. She remains content with her fulfilling career and life.'
     },
     {
-      name: 'Babitha Nadampalli Sreedhara Raju',
+      name: 'Smt.Babitha Nadampalli Sreedhara Raju',
       title: 'Founding Member & General Secretary',
       photo: babhithaNadampalli,
-      highlight: 'First-Generation Lawyer & Law Educator • National & International Legal Author',
-      bio: 'She is a first-generation lawyer. After completion of her Master’s degree in Law, she is currently teaching law and has been writing articles extensively in national and international Journals. Throughout her journey, she has been guided by the unwavering support of her parents and husband, which has enabled her to pursue her work with integrity and dedication. She is ever grateful for the opportunity to be part of this inspiring journey with RKMS.'
+      bio: 'She is a first-generation lawyer. After completion of her Master’s degree in Law, she is currently teaching law and has been writing articles extensively in national and international Journals.\n\nThroughout her journey, she has been guided by the unwavering support of her parents and husband, which has enabled her to pursue her work with integrity and dedication. She is ever grateful for the opportunity to be part of this meaningful and inspiring journey with Raju Kshatriya Mahila Sangha.'
     },
     {
-      name: 'Ms. Padma R',
+      name: 'Smt. Padma R',
       title: 'Joint Secretary',
       photo: padmar,
-      highlight: 'Postgraduate VLSI Engineer • 20+ Years Semiconductor & Core TCS Leader',
-      bio: 'Ms. Padma R is a Postgraduate Engineer specializing in VLSI System Design, with nearly two decades of experience in the semiconductor industry. She was a key Core Member of the Embedded Systems Design team at Tata Consultancy Services (TCS), where she led the Physical Design team and managed multiple projects. Currently engaged in family business and philanthropic community initiatives.'
+      bio: 'Ms. Padma R is a Postgraduate Engineer specializing in VLSI System Design, with nearly two decades of experience in the semiconductor industry. She was a key Core Member of the almost 4K Embedded Systems Design team at Tata Consultancy Services (TCS), where she also led the Physical Design team and successfully managed multiple projects.\n\nShe played a significant role in building and strengthening teams by effectively handling diverse roles and responsibilities. Prior to her tenure at TCS, she worked with U & I Scotty Design Center, Nikkel Exports Corporation, Digipro Design Services, and Process Electronics.\n\nCurrently, she is engaged in her family business and actively participates in philanthropic initiatives focused on community welfare. In her retired life, she is dedicated to giving back to society unconditionally, reflecting her deep sense of social responsibility.'
     },
     {
       name: 'Smt. Padma Raju',
       title: 'Founding Member & Treasurer',
       photo: padmaraju,
-      highlight: 'Retired HSBC Executive • Certified Counselor & Compassionate Treasurer',
-      bio: 'Smt. Padma Raju is an Arts graduate with diverse professional experience and retired from HSBC. Driven by compassion for people’s causes, she furthered her impact by becoming a certified counselor to support individuals and promote well-being. As Treasurer, Smt. Padma Raju brings dedication, empathy, and a strong sense of financial responsibility.'
+      bio: 'Smt. Padma Raju is an Arts graduate with diverse professional experience and has retired from HSBC.\n\nDriven by a compassion for people’s causes, she introspected her strengths and chose to further her impact by becoming a certified counselor. Through this, she strives to support individuals, promote well-being, and contribute meaningfully to society.\n\nAs Treasurer, Smt. Padma Raju brings dedication, empathy, and a strong sense of responsibility.'
     },
     {
-      name: 'Mrs. Leelakrishnamaraju',
+      name: 'Smt.Leelakrishnamaraju',
       title: 'Founding Member & Cultural Secretary',
       photo: leelakrishnamaraju,
-      highlight: '28+ Years Art & Craft Educator • Professional Event Manager & Cultural Lead',
-      bio: 'Mrs. Leelakrishnamaraju has over 28 years of experience as an Art and Craft teacher and Event Manager in reputed educational institutions. She possesses a keen interest in engaging people through interactive activities, fostering creativity and community participation as Cultural Secretary.'
+      bio: 'Mrs. Leelakrishnamaraju has over 28 years of experience as an Art and Craft teacher and Event Manager, having served in reputed educational institutions. She possesses a keen interest in engaging people through fun and interactive activities, fostering creativity and community participation.\n\nShe is currently serving as the Cultural Secretary at Raju Kshatriya Mahila Sangha, where she contributes to organizing and promoting cultural initiatives with dedication and enthusiasm.'
     },
     {
-      name: 'Pushpa Vasu',
-      title: 'Committee Member & Coordinator',
+      name: 'Smt.Pushpa Vasu',
+      title: 'Committee Member',
       photo: pushpavasu,
-      highlight: 'Malleshwaram Community Coordinator • Active Cultural & Social Servant',
       bio: 'Pushpa Vasu is a Committee Member serving as the Coordinator for Malleshwaram since 2022. She has actively participated in events as a coordinator, motivating people for good causes. Guided by a strong spirit of compassion and service, she focuses on women welfare and community cohesion.'
     }
   ];
 
   return (
     <div className="bg-white text-gray-800 font-sans">
-      
+
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-[#0A6C87] to-cyan-700 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-3">
@@ -84,7 +77,7 @@ export function AboutUs() {
           </span>
           <h1 className="text-3xl md:text-5xl font-extrabold">Raju Kshatriya Mahila Sangha</h1>
           <p className="text-base md:text-lg max-w-3xl mx-auto text-cyan-100 leading-relaxed">
-            Empowering women, preserving cultural heritage, and nurturing community growth since 2011.
+            Empowering women
           </p>
         </div>
       </section>
@@ -97,14 +90,20 @@ export function AboutUs() {
               Our Journey
             </span>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Organization History</h2>
-            <p className="text-gray-700 text-sm leading-relaxed text-justify">
-              In the year 2022, the Raju Kshatriya Mahila Sangha marked its inception by ceremonially lighting its first 
-              auspicious Deepam, symbolizing hope, unity, and collective strength. What began as a modest initiative 
-              has since grown into a vibrant platform with over 800+ active members today.
-            </p>
-            <p className="text-gray-700 text-sm leading-relaxed text-justify">
-              Formally registered under the Registrar of Societies, Bangalore (DRB1/SOR/343/2024-2025), RKMS conducts educational aid, cultural celebrations, medical camps, and women entrepreneurship initiatives across Karnataka.
-            </p>
+            <div className="space-y-3 text-gray-700 text-sm leading-relaxed text-justify">
+              <p>
+                In the year 2022, the RKS Mahila Vedike marked its inception by ceremonially lighting its first auspicious Deepam, symbolizing hope, unity, and collective strength. What began as a modest initiative has since grown into a vibrant and dynamic platform. As of today, the Mahila Vedike has expanded to a strong membership of approximately 752 women, reflecting an impressive growth of nearly 300% since its inception. This growth signifies not merely numerical expansion, but a meaningful transformation in community engagement and empowerment.
+              </p>
+              <p>
+                The Mahila Vedike was established in 2022 under the aegis of the Raju Kshatriya Sangha (R), Jayanagar, Bengaluru, Karnataka. With the guidance and leadership of the Hon’ble President, Sri Ganesh Raju, along with the esteemed Committee Members of the Sangha, the women’s wing was formally constituted. The inaugural function was held on 8th October 2022 at Chamaraju Kalyana Mandira, Jayanagar, Bengaluru, marking the official commencement of the RKS Mahila Vedike.
+              </p>
+              <p>
+                In its initial phase, the committee members of the RKS Mahila Sangha actively conducted door-to-door outreach initiatives across select areas in and around Jayanagar to enrol women into the Mahila Vedike, with a nominal lifetime membership fee of ₹500. Over time, these efforts yielded substantial growth, and by 2024, the membership base had expanded to approximately 500 members, with registrations being facilitated through both online and offline channels.
+              </p>
+              <p>
+                As our activities grew multifold, there was a need to register the Sangha into a formal entity, and therefore, the Sangha was registered before the Registrar of societies, Bangalore, on the 13th of December 2024 and was named ‘Raju Kshatriya Mahila Sangha’ (RKMS) bearing registration number DRB1/SOR/343/2024-2025.
+              </p>
+            </div>
           </div>
           <div>
             <ImageWithFallback
@@ -119,7 +118,7 @@ export function AboutUs() {
       {/* Committee Section */}
       <section className="bg-gray-50 py-16 border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          
+
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <span className="text-xs font-bold text-[#0A6C87] uppercase tracking-wider bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">
               Sangha Leadership
@@ -127,30 +126,25 @@ export function AboutUs() {
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
               Executive Committee Members
             </h2>
-            <p className="text-xs text-gray-600">
-              Meet our accomplished leaders dedicated to community service and women empowerment.
-            </p>
           </div>
 
           {/* Tabs */}
           <div className="flex flex-wrap sm:flex-nowrap justify-center gap-2 sm:gap-3">
             <button
               onClick={() => setActiveTab('current')}
-              className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${
-                activeTab === 'current'
-                  ? 'bg-[#0A6C87] text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
-              }`}
+              className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${activeTab === 'current'
+                ? 'bg-[#0A6C87] text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                }`}
             >
               Current Committee Members ({currentMembers.length})
             </button>
             <button
               onClick={() => setActiveTab('former')}
-              className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${
-                activeTab === 'former'
-                  ? 'bg-[#0A6C87] text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
-              }`}
+              className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${activeTab === 'former'
+                ? 'bg-[#0A6C87] text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                }`}
             >
               Former Members
             </button>
@@ -162,8 +156,8 @@ export function AboutUs() {
               {currentMembers.map((member, index) => {
                 const isBioOpen = expandedBio === index;
                 return (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col justify-between"
                   >
                     <div>
@@ -185,11 +179,6 @@ export function AboutUs() {
                             </span>
                           </div>
                           <ShieldCheck className="w-5 h-5 text-[#0A6C87] flex-shrink-0 mt-1" />
-                        </div>
-
-                        {/* Highlight Badge */}
-                        <div className="bg-amber-50 border border-amber-100 text-amber-900 text-xs p-2.5 rounded-lg font-medium">
-                          {member.highlight}
                         </div>
 
                         {/* Biography text */}
@@ -259,11 +248,11 @@ export function AboutUs() {
             },
             {
               question: "2. What programs and services does the organization offer?",
-              answer: "We offer a wide range of programs including skill development workshops, cultural events, educational seminars, health awareness camps, counseling services, and community welfare programs. Our committees organize various activities throughout the year to support women's empowerment and community development."
+              answer: "We offer a wide range of programs including skill development workshops, cultural events, educational seminars, health awareness camps, counseling services, and community welfare programs. Our committee organizes various activities throughout the year to support women's empowerment and community development."
             },
             {
               question: "3. How are committee members selected?",
-              answer: "Committee members are elected through a democratic process during our annual general meeting. Members can nominate themselves or be nominated by other members. Elections are conducted transparently, and committee members serve a tenure of 3 years."
+              answer: "Existing committee members, committee members and coordinators of various zones are eligible to nominate themselves and elected through a democratic process during our annual general meeting. Members can nominate themselves or be nominated by other members. Elections are conducted transparently, and committee members serve a tenure of 5 years."
             },
             {
               question: "4. Can I volunteer without being a member?",
@@ -271,11 +260,11 @@ export function AboutUs() {
             },
             {
               question: "5. How are donations utilized by the organization?",
-              answer: "All donations are used transparently for our community welfare programs, educational initiatives, event organization, and supporting women in need. We maintain detailed financial records and provide regular updates to our members about fund utilization. Donations are tax-deductible under applicable laws."
+              answer: "All donations are used transparently for our community welfare programs, educational initiatives, health initiatives ,sports, event organization, and supporting women in need. We maintain detailed financial records, file income tax promptly and provide regular updates to our members about fund utilization. Donations are tax-deductible under applicable laws."
             },
             {
               question: "6. How often does the organization conduct events?",
-              answer: "We organize events throughout the year, including monthly meetings, quarterly cultural programs, annual celebrations, and special workshops. Members receive regular updates about upcoming events through email, SMS, and our social media channels."
+              answer: "We organize events throughout the year, including monthly meetings, quarterly cultural programs, annual celebrations, and special workshops. Members receive regular updates about upcoming events through our social media channels."
             }
           ].map((faq, index) => (
             <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

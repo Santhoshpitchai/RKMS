@@ -53,7 +53,7 @@ export function Services() {
       title: 'Family Support',
       description: 'Strengthening family bonds through parenting workshops, marriage counseling, and family welfare programs.',
       image: content['service_family'] || 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600',
-      impact: '150+ families counseled',
+      impact: 'families counseled',
     },
   ];
 
@@ -74,8 +74,8 @@ export function Services() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">What We Do</h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Our programs are designed to create lasting impact through education, skill development, 
-            and community support initiatives.
+            Our programs are designed to create lasting impact through education, skill development,
+            health and community support initiatives.
           </p>
         </div>
 

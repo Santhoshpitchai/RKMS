@@ -796,11 +796,58 @@ export function Membership() {
                       className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0A6C87]"
                     >
                       <option value="A+">A+</option>
+                      <option value="A-">A-</option>
                       <option value="B+">B+</option>
-                      <option value="O+">O+</option>
+                      <option value="B-">B-</option>
                       <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
                       <option value="O-">O-</option>
+                      <option value="A1+">A1+</option>
+                      <option value="A1-">A1-</option>
+                      <option value="A2+">A2+</option>
+                      <option value="A2-">A2-</option>
+                      <option value="A1B+">A1B+</option>
+                      <option value="A1B-">A1B-</option>
+                      <option value="A2B+">A2B+</option>
+                      <option value="A2B-">A2B-</option>
+                      <option value="Bombay Group (HH)">Bombay Group (HH)</option>
+                      <option value="Unknown">Unknown / Don't Know</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Educational Qualification</label>
+                    <select
+                      name="educationalQualification"
+                      value={formData.educationalQualification}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0A6C87]"
+                    >
+                      <option value="">Select Qualification</option>
+                      <option value="Below 10th">Below 10th / SSLC</option>
+                      <option value="10th / 12th (PUC/SSLC)">10th / 12th (PUC / SSLC)</option>
+                      <option value="Diploma / Vocational">Diploma / Vocational</option>
+                      <option value="Undergraduate (Bachelor's)">Undergraduate (Bachelor's Degree)</option>
+                      <option value="Postgraduate (Master's)">Postgraduate (Master's Degree)</option>
+                      <option value="Doctorate (Ph.D.)">Doctorate (Ph.D.)</option>
+                      <option value="Professional (CA/CS/LL.B/MD/MBBS)">Professional Degree (CA / CS / LL.B / MD / MBBS)</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Profession / Occupation</label>
+                    <input
+                      type="text"
+                      name="profession"
+                      value={formData.profession}
+                      onChange={handleInputChange}
+                      placeholder="Enter profession (e.g. Software Engineer, Homemaker, Teacher)"
+                      className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0A6C87]"
+                    />
                   </div>
                 </div>
 

@@ -163,15 +163,20 @@ export function MemberManagement() {
   });
 
   const handleExportCSV = () => {
-    const headers = ['Membership ID', 'Name', 'Email', 'Phone', 'City', 'State', 'Status', 'Join Date'];
+    const headers = ['Membership ID', 'Name', 'Guardian', 'Gotra', 'Email', 'Phone', 'Educational Qualification', 'Profession', 'Blood Group', 'City', 'State', 'Status', 'Join Date'];
     const lines = [
       headers.map(csvEscape).join(','),
       ...filteredMembers.map((member) =>
         [
           member.membershipId,
           member.name,
+          member.guardianName,
+          member.gotraName,
           member.email,
           member.phone,
+          member.educationalQualification,
+          member.profession,
+          member.bloodGroup,
           member.city,
           member.state,
           member.status,
@@ -186,15 +191,20 @@ export function MemberManagement() {
   };
 
   const handleExportExcel = () => {
-    const headers = ['Membership ID', 'Name', 'Email', 'Phone', 'City', 'State', 'Status', 'Join Date'];
+    const headers = ['Membership ID', 'Name', 'Guardian', 'Gotra', 'Email', 'Phone', 'Educational Qualification', 'Profession', 'Blood Group', 'City', 'State', 'Status', 'Join Date'];
     const lines = [
       headers.join('\t'),
       ...filteredMembers.map((member) =>
         [
           member.membershipId,
           member.name,
+          member.guardianName,
+          member.gotraName,
           member.email,
           member.phone,
+          member.educationalQualification,
+          member.profession,
+          member.bloodGroup,
           member.city,
           member.state,
           member.status,
@@ -354,7 +364,8 @@ export function MemberManagement() {
                     <th className="py-3 px-4">Gotra / Guardian</th>
                     <th className="py-3 px-4">Contact Email & Phone</th>
                     <th className="py-3 px-4">City</th>
-                    <th className="py-3 px-4">Profession</th>
+                    <th className="py-3 px-4">Education & Profession</th>
+                    <th className="py-3 px-4">Blood Group</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Joined</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -386,7 +397,21 @@ export function MemberManagement() {
                         <div className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.phone}</div>
                       </td>
                       <td className={`py-3 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.city || '-'}</td>
-                      <td className={`py-3 px-4 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.profession || '-'}</td>
+                      <td className="py-3 px-4">
+                        <div className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-200 font-semibold'}>{member.profession || '-'}</div>
+                        {member.educationalQualification && (
+                          <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{member.educationalQualification}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {member.bloodGroup ? (
+                          <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 font-extrabold text-[10px] border border-rose-500/20">
+                            {member.bloodGroup}
+                          </span>
+                        ) : (
+                          <span className={`text-[11px] ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>-</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         {member.status === 'Active' ? (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 inline-flex items-center gap-1 shadow-sm">

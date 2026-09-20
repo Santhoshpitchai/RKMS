@@ -148,7 +148,11 @@ export function UserAuthModal({ isOpen, onClose, onSuccess, title }: UserAuthMod
           resetFields();
           onClose();
         } else {
-          toast.error(response.message || 'Invalid email or password');
+          const errorMsg = response.message || 'Invalid email or password';
+          toast.error(errorMsg);
+          if (response.noAccount || errorMsg.toLowerCase().includes('no account found')) {
+            setMode('register');
+          }
         }
       }
     } catch (error) {

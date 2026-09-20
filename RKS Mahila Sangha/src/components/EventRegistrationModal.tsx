@@ -37,6 +37,8 @@ interface SuccessData {
   isFree: boolean;
   date: string;
   location: string;
+  paymentId?: string;
+  orderId?: string;
 }
 
 export const formatDateSafe = (dateVal: any, options?: Intl.DateTimeFormatOptions) => {
@@ -463,6 +465,16 @@ function SuccessTicket({ data, onClose, onCancel }: { data: SuccessData; onClose
                   <span class="amount-badge">${data.isFree ? 'FREE ENTRY' : '₹' + totalAmtStr}</span>
                 </div>
               </div>
+              ${!data.isFree && data.paymentId ? `
+              <div class="detail-cell">
+                <div class="detail-label">🔖 Payment ID</div>
+                <div class="detail-value" style="font-size:11px;font-family:'Space Mono',monospace;">${data.paymentId}</div>
+              </div>` : ''}
+              ${!data.isFree && data.orderId ? `
+              <div class="detail-cell">
+                <div class="detail-label">📋 Order ID</div>
+                <div class="detail-value" style="font-size:11px;font-family:'Space Mono',monospace;">${data.orderId}</div>
+              </div>` : ''}
               ${data.location ? `
               <div class="detail-cell full-width">
                 <div class="detail-label">📍 Venue / Location</div>
@@ -631,6 +643,18 @@ function SuccessTicket({ data, onClose, onCancel }: { data: SuccessData; onClose
                 {data.isFree ? '₹0 (FREE)' : `₹${formatCurrencySafe(data.totalAmount)}`}
               </p>
             </div>
+            {!data.isFree && data.paymentId && (
+              <div className="p-3 border-t border-gray-100 col-span-2">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">🔖 Payment ID</p>
+                <p className="font-mono font-bold text-[11px] text-[#0A6C87] break-all">{data.paymentId}</p>
+              </div>
+            )}
+            {!data.isFree && data.orderId && (
+              <div className="p-3 border-t border-gray-100 col-span-2">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">📋 Order ID</p>
+                <p className="font-mono font-bold text-[11px] text-gray-700 break-all">{data.orderId}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -759,7 +783,7 @@ export function EventRegistrationModal({
   const isFree = event.is_free || pricePerPerson === 0;
   const totalAmount = isFree ? 0 : pricePerPerson * formData.numberOfAttendees;
 
-  const buildSuccessData = (res: any): SuccessData => ({
+  const buildSuccessData = (res: any, rzpPaymentId?: string, rzpOrderId?: string): SuccessData => ({
     dbId: res.dbId,
     registrationId: res.registrationId || `REG-${Date.now()}`,
     eventTitle: event.title || 'RKS Event',
@@ -770,12 +794,19 @@ export function EventRegistrationModal({
     isFree: res.isFree ?? isFree,
     date: formatDateSafe(event.date, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }),
     location: event.location || '',
+    paymentId: rzpPaymentId || res.payment_id || undefined,
+    orderId: rzpOrderId || res.order_id || undefined,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.phone) {
       toast.error('Please fill in your Name, Email, and Phone number');
+      return;
+    }
+    const phoneDigits = formData.phone.replace(/\D/g, '');
+    if (phoneDigits.length !== 10) {
+      toast.error('Phone number must be exactly 10 digits');
       return;
     }
 
@@ -857,7 +888,7 @@ export function EventRegistrationModal({
 
               if (regRes.success) {
                 toast.success('Payment verified! Registration confirmed.');
-                const succData = buildSuccessData(regRes);
+                const succData = buildSuccessData(regRes, rzpRes.razorpay_payment_id, rzpRes.razorpay_order_id);
                 const newRegObj = {
                   id: regRes.dbId || Date.now(),
                   eventId: event.id,
@@ -873,6 +904,8 @@ export function EventRegistrationModal({
                   paymentAmount: succData.totalAmount,
                   paymentStatus: 'completed',
                   isFree: succData.isFree,
+                  paymentId: rzpRes.razorpay_payment_id,
+                  orderId: rzpRes.razorpay_order_id,
                   date: formatDateSafe(new Date(), { day: '2-digit', month: 'short', year: 'numeric' }),
                 };
                 if (onSuccess) onSuccess(newRegObj);
@@ -978,15 +1011,32 @@ export function EventRegistrationModal({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number *</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number * <span className="text-[10px] text-gray-400 font-normal">(10 digits)</span></label>
                   <input
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({ ...formData, phone: digits });
+                    }}
                     required
-                    placeholder="Enter phone"
-                    className="w-full px-3.5 py-2.5 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#0A6C87] outline-none"
+                    maxLength={10}
+                    inputMode="numeric"
+                    placeholder="10-digit mobile number"
+                    className={`w-full px-3.5 py-2.5 text-xs border rounded-xl focus:ring-2 focus:ring-[#0A6C87] outline-none ${
+                      formData.phone && formData.phone.length > 0 && formData.phone.length < 10
+                        ? 'border-rose-400 bg-rose-50'
+                        : formData.phone.length === 10
+                        ? 'border-emerald-400 bg-emerald-50'
+                        : 'border-gray-300'
+                    }`}
                   />
+                  {formData.phone.length > 0 && formData.phone.length < 10 && (
+                    <p className="text-[10px] text-rose-500 font-semibold mt-1">⚠ {10 - formData.phone.length} more digit(s) needed</p>
+                  )}
+                  {formData.phone.length === 10 && (
+                    <p className="text-[10px] text-emerald-600 font-semibold mt-1">✓ Valid phone number</p>
+                  )}
                 </div>
               </div>
 

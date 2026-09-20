@@ -674,7 +674,8 @@ const cancelRegistration = async (req, res) => {
             const isAdmin = req.admin || authUser.role === 'admin';
 
             if (!isAdmin) {
-                const userEmail = authUser.email ? authUser.email.trim().toLowerCase() : '';
+                const reqEmail = (req.body?.email || req.query?.email || '').trim().toLowerCase();
+                const userEmail = authUser.email ? authUser.email.trim().toLowerCase() : reqEmail;
                 const regEmail = regRecord.email ? regRecord.email.trim().toLowerCase() : '';
 
                 const isOwner = Boolean(userEmail && regEmail && userEmail === regEmail);
@@ -698,12 +699,22 @@ const cancelRegistration = async (req, res) => {
                     supaErr = error;
                 }
             } else {
-                if (!isNaN(numId) && numId > 0) {
-                    const { error } = await supabase.from('event_registrations').update({ payment_status: newStatus }).eq('id', numId);
-                    supaErr = error;
-                } else {
-                    const { error } = await supabase.from('event_registrations').update({ payment_status: newStatus }).eq('registration_id', id);
-                    supaErr = error;
+                const targetKey = (!isNaN(numId) && numId > 0) ? 'id' : 'registration_id';
+                const targetVal = (!isNaN(numId) && numId > 0) ? numId : id;
+
+                const { error: err1 } = await supabase
+                    .from('event_registrations')
+                    .update({ payment_status: newStatus })
+                    .eq(targetKey, targetVal);
+
+                if (err1) {
+                    // Fallback to 'cancelled' if DB schema has check constraint (e.g. IN ('pending', 'completed', 'failed', 'cancelled'))
+                    console.warn('Supabase newStatus update fallback to cancelled:', err1.message);
+                    const { error: err2 } = await supabase
+                        .from('event_registrations')
+                        .update({ payment_status: 'cancelled' })
+                        .eq(targetKey, targetVal);
+                    supaErr = err2;
                 }
             }
 

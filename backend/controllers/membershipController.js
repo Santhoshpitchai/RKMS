@@ -41,16 +41,16 @@ const createMembershipOrder = async (req, res) => {
     const cleanEmail = email ? email.trim().toLowerCase() : '';
     const cleanPhone = phone ? phone.trim() : '';
 
-    // Check if membership is already ACTIVE for this email or phone
-    if (isSupabaseConfigured() && (cleanEmail || cleanPhone)) {
+    // Check if membership is already ACTIVE for this email address strictly
+    if (isSupabaseConfigured() && cleanEmail) {
       try {
         const { data: existingMember } = await supabase
           .from('members')
           .select('*')
-          .or(`email.eq.${cleanEmail},phone.eq.${cleanPhone}`)
+          .ilike('email', cleanEmail)
           .maybeSingle();
 
-        // Only block if membership is currently active — allow re-purchase if cancelled
+        // Only block if membership is currently active for THIS SPECIFIC EMAIL — allow re-purchase if cancelled
         const isActive = existingMember && (existingMember.is_active === true || existingMember.is_active === 1);
         if (isActive && existingMember.membership_id) {
           return res.status(200).json({
@@ -66,12 +66,12 @@ const createMembershipOrder = async (req, res) => {
       }
     }
 
-    // MySQL fallback check — only block active memberships
-    if (!isSupabaseConfigured() && (cleanEmail || cleanPhone)) {
+    // MySQL fallback check — only block active memberships for this email strictly
+    if (!isSupabaseConfigured() && cleanEmail) {
       try {
         const [rows] = await pool.query(
-          'SELECT * FROM members WHERE (LOWER(email) = ? OR phone = ?) AND is_active = 1 LIMIT 1',
-          [cleanEmail, cleanPhone]
+          'SELECT * FROM members WHERE LOWER(email) = ? AND is_active = 1 LIMIT 1',
+          [cleanEmail]
         );
         const existingMember = rows[0];
         if (existingMember && existingMember.membership_id) {
@@ -209,18 +209,19 @@ const verifyMembershipPayment = async (req, res) => {
     // If Supabase is configured, save directly to Supabase
     if (isSupabaseConfigured()) {
       const validMaritalStatus = ['Single', 'Married', 'Widowed', 'Divorced'].includes(maritalStatus) ? maritalStatus : 'Single';
-      const validBloodGroup = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(bloodGroup) ? bloodGroup : 'O+';
+      const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Group (HH)', 'Unknown'];
+      const validBloodGroup = validBloodGroups.includes(bloodGroup) ? bloodGroup : (bloodGroup || 'O+');
 
       let memberData = null;
       const cleanEmail = email ? email.trim().toLowerCase() : '';
       const cleanPhone = phone ? phone.trim() : '';
 
-      if (cleanEmail || cleanPhone) {
+      if (cleanEmail) {
         try {
           const { data: existingM } = await supabase
             .from('members')
             .select('*')
-            .or(`email.eq.${cleanEmail},phone.eq.${cleanPhone}`)
+            .ilike('email', cleanEmail)
             .maybeSingle();
 
           if (existingM) {
@@ -233,6 +234,9 @@ const verifyMembershipPayment = async (req, res) => {
                 gotra_name: gotraName || existingM.gotra_name,
                 email: cleanEmail || existingM.email,
                 phone: cleanPhone || existingM.phone,
+                educational_qualification: educationalQualification || existingM.educational_qualification,
+                profession: profession || existingM.profession,
+                blood_group: validBloodGroup || existingM.blood_group,
                 address: address || existingM.address,
                 city: city || existingM.city,
                 state: state || existingM.state,
@@ -248,36 +252,60 @@ const verifyMembershipPayment = async (req, res) => {
       }
 
       if (!memberData) {
-        const { data: createdM, error: memErr } = await supabase
+        let insertPayload = {
+          name: name || 'New Member',
+          guardian_name: guardianName || null,
+          gotra_name: gotraName || null,
+          email: cleanEmail,
+          phone: cleanPhone,
+          membership_id,
+          date_of_birth: dateOfBirth || null,
+          educational_qualification: educationalQualification || null,
+          profession: profession || null,
+          marital_status: validMaritalStatus,
+          blood_group: validBloodGroup,
+          address: address || '',
+          city: city || '',
+          state: state || 'Karnataka',
+          pincode: pincode || '',
+          aadhar_number: aadharNumber || null,
+          photo_url: photoUrl,
+          is_active: true
+        };
+
+        let { data: createdM, error: memErr } = await supabase
           .from('members')
-          .insert([{
-            name: name || 'New Member',
-            guardian_name: guardianName || null,
-            gotra_name: gotraName || null,
-            email: cleanEmail,
-            phone: cleanPhone,
-            membership_id,
-            date_of_birth: dateOfBirth || null,
-            educational_qualification: educationalQualification || null,
-            profession: profession || null,
-            marital_status: validMaritalStatus,
-            blood_group: validBloodGroup,
-            address: address || '',
-            city: city || '',
-            state: state || 'Karnataka',
-            pincode: pincode || '',
-            aadhar_number: aadharNumber || null,
-            photo_url: photoUrl,
-            is_active: true
-          }])
+          .insert([insertPayload])
           .select()
           .maybeSingle();
+
+        // If membership_id unique constraint violated, generate a new unique ID and retry once
+        if (memErr && (memErr.code === '23505' || (memErr.message || '').includes('duplicate') || (memErr.message || '').includes('unique'))) {
+          console.warn('Membership ID collision detected, generating a new unique ID...');
+          const { generateMembershipId } = require('../utils/idGenerator');
+          const newMembershipId = await generateMembershipId();
+          insertPayload.membership_id = newMembershipId;
+          const retryResult = await supabase
+            .from('members')
+            .insert([insertPayload])
+            .select()
+            .maybeSingle();
+          createdM = retryResult.data;
+          memErr = retryResult.error;
+          if (!memErr && createdM) {
+            // Update the membership_id variable used in the response
+            Object.assign(req.body, { _resolved_membership_id: newMembershipId });
+          }
+        }
 
         memberData = createdM;
         if (memErr) {
           console.error('Supabase member creation error:', memErr.message);
+          return res.status(500).json({ success: false, message: `Failed to create membership record: ${memErr.message}` });
         }
       }
+
+      const effectiveMembershipId = req.body._resolved_membership_id || membership_id;
 
       // Record completed payment in Supabase
       let { data: updatedPayment } = await supabase
@@ -308,7 +336,7 @@ const verifyMembershipPayment = async (req, res) => {
       }
 
       try {
-        await sendMembershipConfirmationEmail(email, name, membership_id);
+        await sendMembershipConfirmationEmail(email, name, effectiveMembershipId);
       } catch (emailErr) {
         console.warn('Confirmation email warning:', emailErr.message);
       }
@@ -316,12 +344,12 @@ const verifyMembershipPayment = async (req, res) => {
       return res.status(201).json({
         success: true,
         message: 'Membership created successfully',
-        membership_id,
+        membership_id: effectiveMembershipId,
         payment_id: razorpay_payment_id || `PAY_${Date.now()}`,
         order_id: razorpay_order_id || `ORDER_${Date.now()}`,
         amount: settings.membershipFee || 1001,
         member: {
-          memberId: membership_id,
+          memberId: effectiveMembershipId,
           fullName: name,
           email,
           phone,
@@ -470,6 +498,7 @@ const getMembershipStatus = async (req, res) => {
             email: memberByIdData.email,
             phone: memberByIdData.phone,
             dateOfBirth: memberByIdData.date_of_birth,
+            educationalQualification: memberByIdData.educational_qualification || '',
             profession: memberByIdData.profession || '',
             address: memberByIdData.address || '',
             city: memberByIdData.city || '',
@@ -593,11 +622,13 @@ const getMembershipStatus = async (req, res) => {
           email: member.email,
           phone: member.phone,
           dateOfBirth: member.date_of_birth,
+          educationalQualification: member.educational_qualification || '',
           profession: member.profession || '',
           address: member.address || '',
           city: member.city || '',
           state: member.state || 'Karnataka',
           pincode: member.pincode || '',
+          bloodGroup: member.blood_group || '',
           photoUrl: member.photo_url || member.photoUrl || null,
           isActive: isMemberActive,
           status: isMemberActive ? 'ACTIVE' : 'CANCELLED',
@@ -634,7 +665,7 @@ const updateMembershipDetails = async (req, res) => {
       }
     }
 
-    const { email, name, fullName, firstName, lastName, phone, guardianName, gotraName, dateOfBirth, profession, address, city, state, pincode } = req.body;
+    const { email, name, fullName, firstName, lastName, phone, guardianName, gotraName, dateOfBirth, educationalQualification, profession, bloodGroup, address, city, state, pincode } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'Member email is required' });
@@ -682,7 +713,9 @@ const updateMembershipDetails = async (req, res) => {
       if (guardianName !== undefined) updateData.guardian_name = guardianName;
       if (gotraName !== undefined) updateData.gotra_name = gotraName;
       if (dateOfBirth !== undefined) updateData.date_of_birth = dateOfBirth;
+      if (educationalQualification !== undefined) updateData.educational_qualification = educationalQualification;
       if (profession !== undefined) updateData.profession = profession;
+      if (bloodGroup !== undefined) updateData.blood_group = bloodGroup;
       if (address !== undefined) updateData.address = address;
       if (city !== undefined) updateData.city = city;
       if (state !== undefined) updateData.state = state;
@@ -720,14 +753,16 @@ const updateMembershipDetails = async (req, res) => {
           phone = COALESCE(?, phone),
           guardian_name = COALESCE(?, guardian_name),
           gotra_name = COALESCE(?, gotra_name),
+          educational_qualification = COALESCE(?, educational_qualification),
           profession = COALESCE(?, profession),
+          blood_group = COALESCE(?, blood_group),
           address = COALESCE(?, address),
           city = COALESCE(?, city),
           state = COALESCE(?, state),
           pincode = COALESCE(?, pincode),
           photo_url = COALESCE(?, photo_url)
         WHERE LOWER(email) = ?`,
-        [finalFullName || null, finalFirstName || null, finalLastName || null, phone || null, guardianName || null, gotraName || null, profession || null, address || null, city || null, state || null, pincode || null, photoUrl || null, cleanEmail]
+        [finalFullName || null, finalFirstName || null, finalLastName || null, phone || null, guardianName || null, gotraName || null, educationalQualification || null, profession || null, bloodGroup || null, address || null, city || null, state || null, pincode || null, photoUrl || null, cleanEmail]
       );
     } catch (mysqlErr) {
       console.warn('MySQL update membership warning:', mysqlErr.message);
@@ -744,7 +779,9 @@ const updateMembershipDetails = async (req, res) => {
         phone,
         guardianName,
         gotraName,
+        educationalQualification,
         profession,
+        bloodGroup,
         address,
         city,
         state,

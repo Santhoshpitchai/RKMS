@@ -158,7 +158,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
     phone: user.phone || '',
     guardianName: '',
     gotraName: '',
+    educationalQualification: '',
     profession: '',
+    bloodGroup: '',
     address: '',
     city: '',
     state: 'Karnataka',
@@ -192,7 +194,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
           phone: membership.phone || user.phone || '',
           guardianName: membership.guardianName || membership.guardian_name || '',
           gotraName: membership.gotraName || membership.gotra_name || '',
+          educationalQualification: membership.educationalQualification || membership.educational_qualification || '',
           profession: membership.profession || '',
+          bloodGroup: membership.bloodGroup || membership.blood_group || '',
           address: membership.address || '',
           city: membership.city || '',
           state: membership.state || 'Karnataka',
@@ -227,7 +231,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
         phone: profileForm.phone,
         guardianName: profileForm.guardianName,
         gotraName: profileForm.gotraName,
+        educationalQualification: profileForm.educationalQualification,
         profession: profileForm.profession,
+        bloodGroup: profileForm.bloodGroup,
         address: profileForm.address,
         city: profileForm.city,
         state: profileForm.state,
@@ -252,7 +258,9 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
           phone: profileForm.phone,
           guardianName: profileForm.guardianName,
           gotraName: profileForm.gotraName,
+          educationalQualification: profileForm.educationalQualification,
           profession: profileForm.profession,
+          bloodGroup: profileForm.bloodGroup,
           address: profileForm.address,
           city: profileForm.city,
           state: profileForm.state,
@@ -327,7 +335,8 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
   const handleCancelRegistration = async (registrationDbId: number) => {
     if (window.confirm('Are you sure you want to cancel this event registration?')) {
       try {
-        const res = await eventsApi.cancelRegistration(registrationDbId);
+        const currentUserEmail = user?.email || fallbackEmail || localStorage.getItem('userEmail') || '';
+        const res = await eventsApi.cancelRegistration(registrationDbId, currentUserEmail);
         if (res.success) {
           toast.success('Registration cancelled successfully');
           setShowEventRegModal(false);
@@ -1843,11 +1852,56 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                         className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0A6C87]"
                       >
                         <option value="A+">A+</option>
+                        <option value="A-">A-</option>
                         <option value="B+">B+</option>
-                        <option value="O+">O+</option>
+                        <option value="B-">B-</option>
                         <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
                         <option value="O-">O-</option>
+                        <option value="A1+">A1+</option>
+                        <option value="A1-">A1-</option>
+                        <option value="A2+">A2+</option>
+                        <option value="A2-">A2-</option>
+                        <option value="A1B+">A1B+</option>
+                        <option value="A1B-">A1B-</option>
+                        <option value="A2B+">A2B+</option>
+                        <option value="A2B-">A2B-</option>
+                        <option value="Bombay Group (HH)">Bombay Group (HH)</option>
+                        <option value="Unknown">Unknown / Don't Know</option>
                       </select>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Educational Qualification</label>
+                      <select
+                        value={membershipForm.educationalQualification}
+                        onChange={(e) => setMembershipForm({ ...membershipForm, educationalQualification: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0A6C87]"
+                      >
+                        <option value="">Select Qualification</option>
+                        <option value="Below 10th">Below 10th / SSLC</option>
+                        <option value="10th / 12th (PUC/SSLC)">10th / 12th (PUC / SSLC)</option>
+                        <option value="Diploma / Vocational">Diploma / Vocational</option>
+                        <option value="Undergraduate (Bachelor's)">Undergraduate (Bachelor's Degree)</option>
+                        <option value="Postgraduate (Master's)">Postgraduate (Master's Degree)</option>
+                        <option value="Doctorate (Ph.D.)">Doctorate (Ph.D.)</option>
+                        <option value="Professional (CA/CS/LL.B/MD/MBBS)">Professional Degree (CA / CS / LL.B / MD / MBBS)</option>
+                        <option value="Others">Others</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Profession / Occupation</label>
+                      <input
+                        type="text"
+                        value={membershipForm.profession}
+                        onChange={(e) => setMembershipForm({ ...membershipForm, profession: e.target.value })}
+                        placeholder="Enter profession (e.g. Software Engineer, Homemaker, Teacher)"
+                        className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#0A6C87]"
+                      />
                     </div>
                   </div>
 
@@ -2397,16 +2451,14 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                     const rId = r.eventId != null ? Number(r.eventId) : (r.event_id != null ? Number(r.event_id) : null);
                     const eId = evt.id != null ? Number(evt.id) : null;
                     const isIdMatch = rId !== null && eId !== null && !isNaN(rId) && !isNaN(eId) && rId === eId;
-                    const isTitleMatch = Boolean(r.eventTitle && evt.title && r.eventTitle.trim().toLowerCase() === evt.title.trim().toLowerCase());
-                    return (isIdMatch || isTitleMatch) && !r.paymentStatus?.includes('cancelled');
+                    return isIdMatch && !r.paymentStatus?.includes('cancelled');
                   });
 
                   const cancelledUserReg = eventRegistrationsHistory.find((r) => {
                     const rId = r.eventId != null ? Number(r.eventId) : (r.event_id != null ? Number(r.event_id) : null);
                     const eId = evt.id != null ? Number(evt.id) : null;
                     const isIdMatch = rId !== null && eId !== null && !isNaN(rId) && !isNaN(eId) && rId === eId;
-                    const isTitleMatch = Boolean(r.eventTitle && evt.title && r.eventTitle.trim().toLowerCase() === evt.title.trim().toLowerCase());
-                    return (isIdMatch || isTitleMatch) && Boolean(r.paymentStatus?.includes('cancelled'));
+                    return isIdMatch && Boolean(r.paymentStatus?.includes('cancelled'));
                   });
 
                   // Gather all possible image references
@@ -2716,6 +2768,24 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                     />
                   </div>
                   <div>
+                    <label className="block font-bold text-gray-700 mb-1">Educational Qualification</label>
+                    <select
+                      value={profileForm.educationalQualification}
+                      onChange={(e) => setProfileForm({ ...profileForm, educationalQualification: e.target.value })}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:border-[#0A6C87] focus:ring-2 focus:ring-cyan-100 shadow-sm"
+                    >
+                      <option value="">Select Educational Qualification</option>
+                      <option value="Below 10th">Below 10th / SSLC</option>
+                      <option value="10th / 12th (PUC/SSLC)">10th / 12th (PUC / SSLC)</option>
+                      <option value="Diploma / Vocational">Diploma / Vocational</option>
+                      <option value="Undergraduate (Bachelor's)">Undergraduate (Bachelor's Degree)</option>
+                      <option value="Postgraduate (Master's)">Postgraduate (Master's Degree)</option>
+                      <option value="Doctorate (Ph.D.)">Doctorate (Ph.D.)</option>
+                      <option value="Professional (CA/CS/LL.B/MD/MBBS)">Professional Degree (CA / CS / LL.B / MD / MBBS)</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block font-bold text-gray-700 mb-1">Profession</label>
                     <input
                       type="text"
@@ -2724,6 +2794,34 @@ export function MemberDashboard({ user, onLogout }: { user: UserData; onLogout: 
                       className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:border-[#0A6C87] focus:ring-2 focus:ring-cyan-100 shadow-sm"
                       placeholder="Profession / Occupation"
                     />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Blood Group</label>
+                    <select
+                      value={profileForm.bloodGroup}
+                      onChange={(e) => setProfileForm({ ...profileForm, bloodGroup: e.target.value })}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:border-[#0A6C87] focus:ring-2 focus:ring-cyan-100 shadow-sm"
+                    >
+                      <option value="">Select Blood Group</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                      <option value="A1+">A1+</option>
+                      <option value="A1-">A1-</option>
+                      <option value="A2+">A2+</option>
+                      <option value="A2-">A2-</option>
+                      <option value="A1B+">A1B+</option>
+                      <option value="A1B-">A1B-</option>
+                      <option value="A2B+">A2B+</option>
+                      <option value="A2B-">A2B-</option>
+                      <option value="Bombay Group (HH)">Bombay Group (HH)</option>
+                      <option value="Unknown">Unknown / Don't Know</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block font-bold text-gray-700 mb-1">City</label>
