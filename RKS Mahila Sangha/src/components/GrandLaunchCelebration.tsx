@@ -11,7 +11,7 @@ const LAUNCH_CONFIG = {
   enabled: true,
 
   // Auto-expiration date (YYYY-MM-DD format). After this date, animations auto-hide!
-  expirationDate: '2026-10-04',
+  expirationDate: '2026-10-03',
 
   // LocalStorage key to remember if user already performed the launch ceremony
   storageKey: 'rkms_launch_curtain_done_v2',
