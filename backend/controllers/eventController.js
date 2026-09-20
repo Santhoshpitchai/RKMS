@@ -137,33 +137,38 @@ const getEvents = async (req, res) => {
         }
 
         // MySQL Fallback
-        const [events] = await pool.query(
-            `SELECT id, title, description, date, time, location, category, price, is_free, image_url, created_at
-             FROM events
-             WHERE is_active = 1
-             ORDER BY date DESC`
-        );
+        try {
+            const [events] = await pool.query(
+                `SELECT id, title, description, date, time, location, category, price, is_free, image_url, created_at
+                 FROM events
+                 WHERE is_active = 1
+                 ORDER BY date DESC`
+            );
 
-        const categorizedEvents = (events || []).map(evt => {
-            const evtDateStr = evt.date ? String(evt.date).split('T')[0] : '';
-            const isPastByDate = Boolean(evtDateStr && evtDateStr < todayStr);
-            const finalCategory = (evt.category === 'past' || isPastByDate) ? 'past' : 'upcoming';
-            const numPrice = Number(evt.price || 0);
-            return {
-                ...evt,
-                category: finalCategory,
-                price: numPrice,
-                fee: numPrice,
-                is_free: evt.is_free || numPrice === 0,
-                images: evt.image_url ? [evt.image_url] : [],
-            };
-        });
+            const categorizedEvents = (events || []).map(evt => {
+                const evtDateStr = evt.date ? String(evt.date).split('T')[0] : '';
+                const isPastByDate = Boolean(evtDateStr && evtDateStr < todayStr);
+                const finalCategory = (evt.category === 'past' || isPastByDate) ? 'past' : 'upcoming';
+                const numPrice = Number(evt.price || 0);
+                return {
+                    ...evt,
+                    category: finalCategory,
+                    price: numPrice,
+                    fee: numPrice,
+                    is_free: evt.is_free || numPrice === 0,
+                    images: evt.image_url ? [evt.image_url] : [],
+                };
+            });
 
-        // Update cache
-        eventsCache = categorizedEvents;
-        eventsCacheTime = now;
+            // Update cache
+            eventsCache = categorizedEvents;
+            eventsCacheTime = now;
 
-        res.status(200).json({ success: true, events: categorizedEvents });
+            return res.status(200).json({ success: true, events: categorizedEvents });
+        } catch (mysqlErr) {
+            console.warn('MySQL fallback warning:', mysqlErr.message);
+            return res.status(200).json({ success: true, events: [] });
+        }
     } catch (error) {
         console.error('Get events error:', error);
         res.status(500).json({ message: 'Internal server error' });
